@@ -31,3 +31,194 @@
   background: #8b342e !important;
 }
 
+/* ─── Attachment Uploader ─────────────────────────────────────────────── */
+.attachment-uploader {
+  margin: 0.75rem 0 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.attachment-upload-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  font: 500 0.82rem var(--sans);
+  color: var(--blue);
+  background: var(--pale);
+  border: 1.5px dashed #a0b4bb;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  width: fit-content;
+  transition: background 0.15s, border-color 0.15s;
+  user-select: none;
+}
+.attachment-upload-label:hover {
+  background: #d5e7eb;
+  border-color: var(--blue);
+}
+.attachment-preview-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  min-height: 0;
+}
+
+/* Upload preview items */
+.upload-preview-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.4rem;
+  max-width: 100px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  gap: 0.25rem;
+  text-align: center;
+}
+.upload-preview-img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 3px;
+  display: block;
+}
+.upload-preview-file {
+  width: 100px;
+  flex-direction: row;
+  max-width: 220px;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  gap: 0.4rem;
+  align-items: center;
+}
+.upload-preview-file-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.upload-preview-name {
+  word-break: break-all;
+  font-size: 0.72rem;
+  color: var(--ink);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 130px;
+}
+.upload-preview-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 18px;
+  text-align: center;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px #0003;
+}
+.upload-preview-file .upload-preview-remove {
+  position: static;
+  flex-shrink: 0;
+}
+
+/* ─── Published Attachments ───────────────────────────────────────────── */
+.attachments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background: var(--pale);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.attachment-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+.attachment-image {
+  max-width: 220px;
+}
+.attachment-preview-link {
+  display: block;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.attachment-preview-link:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 14px #0002;
+}
+.attachment-img-preview {
+  display: block;
+  max-width: 220px;
+  max-height: 200px;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+.attachment-file {
+  flex-direction: row;
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  gap: 0.55rem;
+  max-width: 320px;
+}
+.attachment-file-icon {
+  color: var(--blue);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.attachment-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.attachment-name {
+  font-size: 0.8rem;
+  color: var(--ink);
+  word-break: break-word;
+}
+.attachment-name small {
+  color: var(--muted);
+}
+.attachment-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font: 500 0.75rem var(--sans);
+  color: var(--blue);
+  text-decoration: none;
+  background: var(--pale);
+  border: 1px solid #a0b4bb;
+  padding: 0.22rem 0.5rem;
+  border-radius: 3px;
+  transition: background 0.12s;
+  cursor: pointer;
+  width: fit-content;
+}
+.attachment-download-btn:hover {
+  background: #d5e7eb;
+}

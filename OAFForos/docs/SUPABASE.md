@@ -58,3 +58,22 @@ Con el sitio servido localmente, compruebe:
 Si una consulta falla, abra la consola del navegador y copie el mensaje de
 error junto con la operación realizada; suele indicar directamente la tabla o
 política que hay que ajustar.
+
+## 6. Configurar Storage para adjuntos
+
+Para habilitar la subida de imágenes, PDFs y archivos en temas, respuestas y problemas:
+
+1. En el **SQL Editor**, ejecute el contenido de `supabase/storage_attachments.sql`.
+   Esto crea el bucket `attachments` con:
+   - **Lectura pública** (cualquier visitante puede ver imágenes y descargar archivos).
+   - **Escritura** solo para usuarios autenticados.
+   - **Borrado** solo para el propietario del archivo.
+   - **Límite de 10 MB** por archivo.
+   - Tipos permitidos: imágenes, PDF, Word, Excel, PowerPoint, TXT, ZIP, RAR.
+
+2. Opcionalmente en **Storage > Policies**, verifique que las tres políticas
+   `attachments_*` estén activas en el bucket `attachments`.
+
+> **Nota**: Los adjuntos se guardan bajo rutas como `topic/<id>/...`,
+> `reply/<id>/...`. En modo demostración (sin Supabase), las imágenes se
+> previsual­izas usando `object URL` locales y no se persisten.

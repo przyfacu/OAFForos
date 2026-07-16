@@ -1,6 +1,6 @@
 import { demo } from "./demo-data.js";
 import { configured, supabase, currentUser } from "./supabase.js";
-import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, createReply, updateReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword } from "./api.js";
+import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, createReply, updateReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword, uploadAttachments } from "./api.js";
 
 const main = document.querySelector("main"), modal = document.querySelector("#modal"), notice = document.querySelector("#notice");
 let activeProposals = [];
@@ -44,6 +44,135 @@ const md = text => {
 
 function flash(message){ notice.textContent=message;notice.classList.add("show");setTimeout(()=>notice.classList.remove("show"),3200); }
 function nav(){document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("active",location.hash.startsWith(a.getAttribute("href"))))}
+
+// ─── Attachments helpers ─────────────────────────────────────────────────────
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+function isImage(type, name) {
+  return type?.startsWith("image/") || /\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i.test(name || "");
+}
+
+/**
+ * Renderiza una lista de adjuntos como HTML.
+ * Imágenes: vista previa clickable + botón descargar.
+ * Archivos: ícono + nombre + botón descargar.
+ */
+function renderAttachments(attachments) {
+  if (!attachments || attachments.length === 0) return "";
+  const items = attachments.map(a => {
+    if (isImage(a.type, a.name)) {
+      return `
+        <div class="attachment-item attachment-image">
+          <a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer" class="attachment-preview-link" title="Ver imagen completa">
+            <img src="${esc(a.url)}" alt="${esc(a.name)}" class="attachment-img-preview" loading="lazy">
+          </a>
+          <div class="attachment-meta">
+            <span class="attachment-name">${esc(a.name)}</span>
+            <a href="${esc(a.url)}" download="${esc(a.name)}" class="attachment-download-btn" title="Descargar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Descargar
+            </a>
+          </div>
+        </div>`;
+    } else {
+      const isPdf = a.name?.toLowerCase().endsWith(".pdf") || a.type === "application/pdf";
+      const icon = isPdf
+        ? `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>`
+        : `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`;
+      return `
+        <div class="attachment-item attachment-file">
+          <span class="attachment-file-icon">${icon}</span>
+          <span class="attachment-name">${esc(a.name)}${a.size ? `<small> · ${formatBytes(a.size)}</small>` : ""}</span>
+          <a href="${esc(a.url)}" download="${esc(a.name)}" class="attachment-download-btn" title="Descargar ${esc(a.name)}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Descargar
+          </a>
+        </div>`;
+    }
+  }).join("");
+  return `<div class="attachments-list">${items}</div>`;
+}
+
+/**
+ * Crea el HTML del componente de upload de archivos.
+ * @param {string} inputId - ID único para el <input type="file">
+ * @returns {string} HTML
+ */
+function buildAttachmentUploaderHTML(inputId) {
+  return `
+    <div class="attachment-uploader" id="uploader-${inputId}">
+      <label class="attachment-upload-label" for="${inputId}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Adjuntar archivos
+      </label>
+      <input type="file" id="${inputId}" class="attachment-input" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" style="display:none;">
+      <div class="attachment-preview-area" id="preview-${inputId}"></div>
+    </div>
+  `;
+}
+
+/**
+ * Inicializa el uploader de archivos en un contenedor.
+ * @param {string} inputId - ID del <input type="file">
+ * @returns {{ getFiles: () => File[] }} API del uploader
+ */
+function initAttachmentUploader(inputId) {
+  const input = document.getElementById(inputId);
+  const previewArea = document.getElementById(`preview-${inputId}`);
+  const label = document.querySelector(`label[for="${inputId}"]`);
+  let files = [];
+
+  function renderPreview() {
+    previewArea.innerHTML = files.map((f, i) => {
+      const objectUrl = URL.createObjectURL(f);
+      if (isImage(f.type, f.name)) {
+        return `<div class="upload-preview-item" data-index="${i}">
+          <img src="${objectUrl}" alt="${esc(f.name)}" class="upload-preview-img">
+          <button type="button" class="upload-preview-remove" data-index="${i}" title="Quitar">×</button>
+          <span class="upload-preview-name">${esc(f.name)}</span>
+        </div>`;
+      } else {
+        const isPdf = f.name.toLowerCase().endsWith(".pdf");
+        return `<div class="upload-preview-item upload-preview-file" data-index="${i}">
+          <span class="upload-preview-file-icon">${isPdf ? "📄" : "📎"}</span>
+          <span class="upload-preview-name">${esc(f.name)}</span>
+          <small>${formatBytes(f.size)}</small>
+          <button type="button" class="upload-preview-remove" data-index="${i}" title="Quitar">×</button>
+        </div>`;
+      }
+    }).join("");
+
+    // Revoke object URLs on next tick to avoid memory leaks (they render before we revoke)
+    previewArea.querySelectorAll(".upload-preview-remove").forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.getAttribute("data-index"));
+        files.splice(idx, 1);
+        renderPreview();
+      };
+    });
+  }
+
+  input.addEventListener("change", () => {
+    const newFiles = Array.from(input.files);
+    // Limit total 10 files
+    const combined = [...files, ...newFiles].slice(0, 10);
+    files = combined;
+    input.value = "";
+    renderPreview();
+  });
+
+  return {
+    getFiles: () => files,
+    clear: () => { files = []; renderPreview(); }
+  };
+}
+
 const topicRow = t => `<a class="topic-row" href="#tema/${t.id}"><span class="topic-count"><b>${t.replies ?? 0}</b>respuestas</span><span><h3>${esc(t.title)}</h3><span class="topic-meta">${esc(t.author)} · ${esc(t.created)}</span><br>${(t.tags||[]).map(x=>`<i class="tag">${esc(x)}</i>`).join("")}</span><span class="muted">›</span></a>`;
 
 const icons = { mecanica: "↗", electromagnetismo: "ϟ", termodinamica: "◌", ondas: "≈", moderna: "◈", comunidad: "○" };
@@ -119,12 +248,13 @@ async function topic(id){
         }
         replyActions += `<button class="action-btn report-btn" data-reply-id="${r.id}">Reportar</button>`;
       }
+      const attachmentsHTML = renderAttachments(r.attachments || []);
       return `<section class="reply" id="reply-${r.id}">
         <div class="reply-head">
           <b>${esc(r.author)}</b>
           <span>${esc(r.created)} ${replyActions}</span>
         </div>
-        ${r.isSpoiler?`<details class="spoiler"><summary>Mostrar spoiler</summary><div class="reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div></details>`:`<div class="reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div>`}
+        ${r.isSpoiler?`<details class="spoiler"><summary>Mostrar spoiler</summary><div class="reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div>${attachmentsHTML}</details>`:`<div class="reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div>${attachmentsHTML}`}
       </section>`;
     }).join("");
   } else {
@@ -144,7 +274,8 @@ async function topic(id){
             <input type="checkbox" id="reply-spoiler">
             <label for="reply-spoiler" style="font-size:0.9rem; font-weight:normal; cursor:pointer;">Marcar como spoiler (ocultar por defecto)</label>
           </div>
-          <button class="button">Enviar respuesta</button>
+          ${buildAttachmentUploaderHTML("reply-files")}
+          <button class="button" style="margin-top:0.8rem;">Enviar respuesta</button>
         </form>
       </section>
     `;
@@ -161,6 +292,7 @@ async function topic(id){
     <h1>${esc(t.title)}</h1>
     <p class="topic-meta">${esc(t.author)} · ${esc(t.created)} ${topicActions}</p>
     <div class="topic-body" data-raw="${esc(t.body)}">${md(t.body)}</div>
+    ${renderAttachments(t.attachments || [])}
     <div style="margin-top:1rem; margin-bottom: 2rem;">
       ${(t.tags||[]).map(x=>`<i class="tag">${esc(x)}</i>`).join("")}
     </div>
@@ -170,6 +302,11 @@ async function topic(id){
     </div>
     ${replyFormHTML}
   </article>`;
+
+  // Init reply uploader after DOM update
+  if (user) {
+    window.__replyUploader = initAttachmentUploader("reply-files");
+  }
 }
 
 async function newTopic(problemId){
@@ -210,13 +347,19 @@ async function newTopic(problemId){
         <label for="body">Pregunta o desarrollo</label>
         <textarea id="body" required></textarea>
       </div>
-      <button class="button">Publicar tema</button>
+      ${buildAttachmentUploaderHTML("topic-files")}
+      <button class="button" style="margin-top:0.8rem;">Publicar tema</button>
     </form>
   </section>`;
 
+  const topicUploader = initAttachmentUploader("topic-files");
+
   document.querySelector("#topic-form").onsubmit=async e=>{
     e.preventDefault();
+    const submitBtn = e.target.querySelector(".button[type!='button']") || e.target.querySelector(".button");
     try{
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Publicando...";
       let f=e.target;
       let tagsList = f.tags.value.split(",")
         .map(t => t.toLowerCase().trim().replace(/[^a-z0-9-]/g, ""))
@@ -230,9 +373,22 @@ async function newTopic(problemId){
         tags: tagsList,
         problem_id: problemId || null
       });
+
+      // Upload attachments if any
+      const files = topicUploader.getFiles();
+      if (files.length > 0) {
+        try {
+          await uploadAttachments(files, "topic", row.id);
+        } catch(uploadErr) {
+          flash("Tema publicado, pero hubo un error al subir los archivos: " + uploadErr.message);
+        }
+      }
+
       location.hash=`#tema/${row.id}`;
     }catch(err){
-      flash(err.message)
+      flash(err.message);
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Publicar tema";
     }
   }
 }
@@ -1275,15 +1431,32 @@ main.addEventListener("submit", async e => {
     const body = e.target.querySelector("#reply-body").value.trim();
     const isSpoiler = e.target.querySelector("#reply-spoiler").checked;
     if (!body) return;
+    const submitBtn = e.target.querySelector(".button");
     try {
-      await createReply(topicId, body, isSpoiler);
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Enviando..."; }
+      const reply = await createReply(topicId, body, isSpoiler);
+
+      // Upload attachments if any
+      if (window.__replyUploader) {
+        const files = window.__replyUploader.getFiles();
+        if (files.length > 0) {
+          try {
+            await uploadAttachments(files, "reply", reply.id);
+          } catch(uploadErr) {
+            flash("Respuesta publicada, pero error al subir archivos: " + uploadErr.message);
+          }
+        }
+      }
+
       flash("Respuesta publicada.");
       await topic(topicId);
     } catch (err) {
       flash(err.message);
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Enviar respuesta"; }
     }
   }
 });
+
 
 document.querySelector("#search-toggle").onclick = () => { location.hash = "#buscar"; };
 document.querySelector("#auth-button").onclick=auth;

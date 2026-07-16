@@ -463,4 +463,62 @@ export async function updateUserPassword(newPassword) {
   if (error) throw error;
 }
 
+/**
+ * Sube archivos al bucket "attachments" de Supabase Storage.
+ * @param {FileList|File[]} files - Archivos a subir
+ * @param {string} context - "topic" | "reply" | "problem"
+ * @param {string} contextId - ID del topic/reply/problem
+ * @returns {Promise<Array<{name, path, url, type, size}>>}
+ */
+export async function uploadAttachments(files, context, contextId) {
+  if (!supabase) {
+    // Demo mode: devuelve objetos fake con object URL
+    return Array.from(files).map(f => ({
+      name: f.name,
+      path: `demo/${f.name}`,
+      url: URL.createObjectURL(f),
+      type: f.type,
+      size: f.size
+    }));
+  }
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Ingresá para subir archivos.");
+
+  const results = [];
+  for (const file of Array.from(files)) {
+    const ext = file.name.split(".").pop();
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${context}/${contextId}/${Date.now()}_${safeName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("attachments")
+      .upload(path, file, { upsert: false });
+
+    if (uploadError) throw uploadError;
+
+    const { data: urlData } = supabase.storage
+      .from("attachments")
+      .getPublicUrl(path);
+
+    results.push({
+      name: file.name,
+      path,
+      url: urlData.publicUrl,
+      type: file.type,
+      size: file.size
+    });
+  }
+  return results;
+}
+
+/**
+ * Obtiene la URL pública de un archivo en Storage.
+ */
+export function getPublicAttachmentUrl(path) {
+  if (!supabase) return null;
+  const { data } = supabase.storage.from("attachments").getPublicUrl(path);
+  return data?.publicUrl || null;
+}
+
 
