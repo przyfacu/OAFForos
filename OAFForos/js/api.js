@@ -340,9 +340,19 @@ export async function getCurrentUserProfile() {
   if (!supabase) return { id: "demo-user", username: "miembro_demo", role: "admin" };
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-  if (error) return null;
-  return data;
+  for (let i = 0; i < 3; i++) {
+    const { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+    if (!error && data) {
+      return data;
+    }
+    if (error && error.code !== "PGRST116") {
+      console.warn(`Attempt ${i + 1} to fetch profile failed:`, error);
+    }
+    if (i < 2) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+  }
+  return null;
 }
 
 export async function getArchiveProposals() {

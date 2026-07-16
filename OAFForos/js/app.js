@@ -688,6 +688,9 @@ async function updateAuth(){
       const profile = await getCurrentUserProfile();
       if (profile) {
         username = profile.username;
+        if (!profile.username_set && !location.hash.startsWith("#establecer-username")) {
+          location.hash = "#establecer-username";
+        }
       } else {
         username = u.user_metadata?.username || u.email;
       }
@@ -728,7 +731,8 @@ async function router(){
       return;
     }
     location.hash = "#";
-    return;
+    // Continue processing after resetting hash
+    hash = "";
   }
   let [route,id]=hash.split("/");
 
