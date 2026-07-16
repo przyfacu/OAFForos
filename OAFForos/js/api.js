@@ -396,3 +396,18 @@ export async function resolveReport(id) {
   if (error) throw error;
 }
 
+export async function checkUsernameTaken(username) {
+  if (!supabase) return false;
+  // username in profiles must be checked as is or lowercased if needed
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("username")
+    .eq("username", username)
+    .maybeSingle();
+  if (error && error.code !== "PGRST116") { // PGRST116 is single row expected but 0 returned, which is fine
+    console.error("Error checking username:", error);
+  }
+  return !!data;
+}
+
+

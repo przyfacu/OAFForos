@@ -1,6 +1,6 @@
 import { demo } from "./demo-data.js";
 import { configured, supabase, currentUser } from "./supabase.js";
-import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, createReply, updateReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem } from "./api.js";
+import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, createReply, updateReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken } from "./api.js";
 
 const main = document.querySelector("main"), modal = document.querySelector("#modal"), notice = document.querySelector("#notice");
 let activeProposals = [];
@@ -675,37 +675,23 @@ async function showApproveProposalModal(p) {
 }
 
 function auth(){
-  modal.style.width = "";
-  modal.innerHTML=`<div class="modal-content"><button class="icon-button" style="float:right" onclick="this.closest('dialog').close()">×</button><h2>Sumate a la conversación</h2><p class="muted">Para publicar y proponer entradas del archivo.</p><form id="auth-form"><div class="form-row"><label>Email</label><input class="input" type="email" required></div><div class="form-row"><label>Contraseña</label><input class="input" type="password" required minlength="6"></div><button class="button">Ingresar</button></form><hr><button class="button button-quiet" id="google">Continuar con Google</button><p class="muted">¿No tenés cuenta? Ingresá tu email para registrarte.</p></div>`;
-  modal.showModal();
-  modal.querySelector("#auth-form").onsubmit=async e=>{
-    e.preventDefault();
-    if(!supabase)return flash("Configurá Supabase para habilitar cuentas.");
-    let [email,password]=[...e.target.querySelectorAll("input")].map(x=>x.value);
-    let {error}=await supabase.auth.signInWithPassword({email,password});
-    if(error){
-      let r=await supabase.auth.signUp({email,password});
-      error=r.error;
-      flash(error?error.message:"Revisá tu correo para confirmar la cuenta.")
-    }else{
-      modal.close();
-      flash("Sesión iniciada.");
-      await updateAuth();
-      router();
-    }
-  };
-  modal.querySelector("#google").onclick=()=>supabase?supabase.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.href}}):flash("Configurá Supabase para habilitar cuentas.");
+  location.hash = "#ingresar";
 }
 
 async function updateAuth(){
   let u=await currentUser();
-  document.querySelector("#auth-button").textContent=u?(u.user_metadata?.username||u.email):"Ingresar";
+  let username = "Ingresar";
   
-  // Mostrar u ocultar link de moderación si es staff
   const nav = document.querySelector("nav");
   if (u) {
     try {
       const profile = await getCurrentUserProfile();
+      if (profile) {
+        username = profile.username;
+      } else {
+        username = u.user_metadata?.username || u.email;
+      }
+      
       let modLink = document.querySelector("#nav-moderacion");
       if (profile && (profile.role === "moderator" || profile.role === "admin")) {
         if (!modLink) {
@@ -721,6 +707,7 @@ async function updateAuth(){
       }
     } catch (err) {
       console.error("Error fetching profile for auth update:", err);
+      username = u.user_metadata?.username || u.email;
     }
   } else {
     let modLink = document.querySelector("#nav-moderacion");
@@ -728,11 +715,18 @@ async function updateAuth(){
       modLink.remove();
     }
   }
+  
+  document.querySelector("#auth-button").textContent = username;
 }
 
 async function router(){
   nav();
-  let [route,id]=location.hash.slice(1).split("/");
+  let hash = location.hash.slice(1);
+  if (hash.includes("access_token=") || hash.includes("error=")) {
+    location.hash = "#";
+    return;
+  }
+  let [route,id]=hash.split("/");
   try{
     if(route==="foro")await forum(id);
     else if(route==="archivo") {if(id)await archiveDetail(id);else await archive()}
@@ -743,11 +737,226 @@ async function router(){
     else if(route==="acerca")about();
     else if(route==="buscar")await searchPage(id);
     else if(route==="moderacion")await moderationPage();
+    else if(route==="ingresar")await ingresarPage();
     else await home();
   }catch(e){
     console.error(e);
     flash("No pudimos cargar este contenido.");
   }
+}
+
+async function ingresarPage() {
+  const u = await currentUser();
+  
+  if (u) {
+    const profile = await getCurrentUserProfile();
+    const username = profile ? profile.username : (u.user_metadata?.username || "miembro");
+    main.innerHTML = `
+      <section class="page-head" style="text-align: center;">
+        <div class="eyebrow">Mi Cuenta</div>
+        <h1>Sesión iniciada</h1>
+        <p>Hola, <strong>${esc(username)}</strong>. Estás conectado con el correo ${esc(u.email)}.</p>
+      </section>
+      <section class="forum-layout" style="max-width: 480px; margin: auto; padding-bottom: 5rem;">
+        <div class="sidebar-box" style="text-align: center; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
+          <h3 style="margin-bottom: 1.5rem; font-family: var(--serif);">¿Deseas cerrar tu sesión actual?</h3>
+          <button class="button btn-danger" id="logout-btn" style="width: 100%; padding: 0.8rem;">Cerrar Sesión</button>
+        </div>
+      </section>
+    `;
+    
+    document.getElementById("logout-btn").onclick = async () => {
+      if (supabase) {
+        await supabase.auth.signOut();
+        flash("Sesión cerrada.");
+        await updateAuth();
+        location.hash = "#";
+      }
+    };
+    return;
+  }
+  
+  main.innerHTML = `
+    <section class="page-head" style="text-align: center;">
+      <div class="eyebrow">Acceso</div>
+      <h1>Únete a OAFForos</h1>
+      <p>Inicia sesión o regístrate para participar en el foro y proponer problemas.</p>
+    </section>
+    <section class="forum-layout" style="max-width: 480px; margin: auto; padding-bottom: 5rem;">
+      <div class="sidebar-box" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
+        <!-- Tabs -->
+        <div style="display: flex; border-bottom: 2px solid var(--line); margin-bottom: 1.5rem; justify-content: space-around;">
+          <button id="tab-login" class="action-btn" style="flex: 1; padding: 0.8rem; font-size: 1rem; text-decoration: none; border-bottom: 3px solid var(--gold); font-weight: 600; color: var(--navy); background: transparent;">Iniciar Sesión</button>
+          <button id="tab-signup" class="action-btn" style="flex: 1; padding: 0.8rem; font-size: 1rem; text-decoration: none; border-bottom: 3px solid transparent; font-weight: 500; color: var(--muted); background: transparent;">Crear Cuenta</button>
+        </div>
+        
+        <!-- Formulario Iniciar Sesión -->
+        <form id="login-form">
+          <div class="form-row">
+            <label for="login-email">Correo electrónico</label>
+            <input class="input" type="email" id="login-email" required placeholder="tu@correo.com">
+          </div>
+          <div class="form-row">
+            <label for="login-password">Contraseña</label>
+            <input class="input" type="password" id="login-password" required minlength="6" placeholder="••••••••">
+          </div>
+          <button class="button" style="width: 100%; margin-top: 1rem; padding: 0.8rem;">Ingresar</button>
+        </form>
+        
+        <!-- Formulario Crear Cuenta -->
+        <form id="signup-form" style="display: none;">
+          <div class="form-row">
+            <label for="signup-email">Correo electrónico</label>
+            <input class="input" type="email" id="signup-email" required placeholder="tu@correo.com">
+          </div>
+          <div class="form-row">
+            <label for="signup-username">Nombre de usuario (username)</label>
+            <input class="input" type="text" id="signup-username" required placeholder="ej. Newton_99" pattern="^[a-zA-Z0-9_]{3,30}$" title="De 3 a 30 caracteres. Solo letras, números y guión bajo (_).">
+            <small class="muted" style="display: block; margin-top: 0.25rem; font-size: 0.75rem;">De 3 a 30 caracteres. Solo letras, números y guión bajo (_).</small>
+          </div>
+          <div class="form-row">
+            <label for="signup-password">Contraseña</label>
+            <input class="input" type="password" id="signup-password" required minlength="6" placeholder="Mínimo 6 caracteres">
+          </div>
+          <button class="button" style="width: 100%; margin-top: 1rem; padding: 0.8rem;">Registrarse</button>
+        </form>
+        
+        <div style="display: flex; align-items: center; margin: 1.5rem 0;">
+          <hr style="flex: 1; border: 0; border-top: 1px solid var(--line);">
+          <span class="muted" style="margin: 0 1rem; font-size: 0.8rem;">O bien</span>
+          <hr style="flex: 1; border: 0; border-top: 1px solid var(--line);">
+        </div>
+        
+        <button class="button button-quiet" id="google-btn" style="width: 100%; padding: 0.8rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+          </svg>
+          Continuar con Google
+        </button>
+      </div>
+    </section>
+  `;
+  
+  const tabLogin = document.getElementById("tab-login");
+  const tabSignup = document.getElementById("tab-signup");
+  const loginForm = document.getElementById("login-form");
+  const signupForm = document.getElementById("signup-form");
+  
+  tabLogin.onclick = () => {
+    tabLogin.style.borderBottomColor = "var(--gold)";
+    tabLogin.style.color = "var(--navy)";
+    tabLogin.style.fontWeight = "600";
+    
+    tabSignup.style.borderBottomColor = "transparent";
+    tabSignup.style.color = "var(--muted)";
+    tabSignup.style.fontWeight = "500";
+    
+    loginForm.style.display = "block";
+    signupForm.style.display = "none";
+  };
+  
+  tabSignup.onclick = () => {
+    tabSignup.style.borderBottomColor = "var(--gold)";
+    tabSignup.style.color = "var(--navy)";
+    tabSignup.style.fontWeight = "600";
+    
+    tabLogin.style.borderBottomColor = "transparent";
+    tabLogin.style.color = "var(--muted)";
+    tabLogin.style.fontWeight = "500";
+    
+    loginForm.style.display = "none";
+    signupForm.style.display = "block";
+  };
+  
+  loginForm.onsubmit = async e => {
+    e.preventDefault();
+    if (!supabase) return flash("Configurá Supabase para habilitar cuentas.");
+    const email = document.getElementById("login-email").value.trim();
+    const password = document.getElementById("login-password").value;
+    
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        flash("Error al iniciar sesión: " + error.message);
+      } else {
+        flash("Sesión iniciada.");
+        await updateAuth();
+        location.hash = "#";
+      }
+    } catch (err) {
+      flash("Error: " + err.message);
+    }
+  };
+  
+  signupForm.onsubmit = async e => {
+    e.preventDefault();
+    if (!supabase) return flash("Configurá Supabase para habilitar cuentas.");
+    const email = document.getElementById("signup-email").value.trim();
+    const username = document.getElementById("signup-username").value.trim();
+    const password = document.getElementById("signup-password").value;
+    
+    const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
+    if (!usernameRegex.test(username)) {
+      return flash("El username debe tener entre 3 y 30 caracteres (letras, números y guión bajo).");
+    }
+    
+    try {
+      const taken = await checkUsernameTaken(username);
+      if (taken) {
+        return flash("El nombre de usuario '" + username + "' ya está en uso.");
+      }
+      
+      const redirectUrl = window.location.hostname === 'localhost' 
+        ? window.location.origin 
+        : 'https://oaf-foros.vercel.app';
+        
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username: username
+          },
+          emailRedirectTo: redirectUrl
+        }
+      });
+      
+      if (error) {
+        flash("Error al registrarse: " + error.message);
+      } else {
+        flash("Registro exitoso. Revisa tu correo para verificar la cuenta.");
+        signupForm.reset();
+        tabLogin.click();
+      }
+    } catch (err) {
+      flash("Error: " + err.message);
+    }
+  };
+  
+  document.getElementById("google-btn").onclick = async () => {
+    if (!supabase) return flash("Configurá Supabase para habilitar cuentas.");
+    
+    const redirectUrl = window.location.hostname === 'localhost' 
+      ? window.location.origin 
+      : 'https://oaf-foros.vercel.app';
+      
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUrl
+        }
+      });
+      if (error) {
+        flash("Error con Google: " + error.message);
+      }
+    } catch (err) {
+      flash("Error: " + err.message);
+    }
+  };
 }
 
 // Event Listeners globales en main para edición y reporte
