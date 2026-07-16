@@ -11,6 +11,7 @@ create table public.profiles (
   display_name text check (char_length(display_name) <= 80),
   bio text check (char_length(bio) <= 500),
   role public.app_role not null default 'member',
+  username_set boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -108,13 +109,17 @@ create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
   val_username text;
+  val_username_set boolean;
 begin
   val_username := new.raw_user_meta_data->>'username';
   if val_username is null or val_username = '' then
     val_username := coalesce(nullif(regexp_replace(split_part(new.email, '@', 1), '[^a-zA-Z0-9_]', '', 'g'), ''), 'miembro') || '_' || substr(new.id::text,1,6);
+    val_username_set := false;
+  else
+    val_username_set := true;
   end if;
-  insert into public.profiles(id, username, display_name)
-  values (new.id, val_username, coalesce(new.raw_user_meta_data->>'full_name', val_username));
+  insert into public.profiles(id, username, display_name, username_set)
+  values (new.id, val_username, coalesce(new.raw_user_meta_data->>'full_name', val_username), val_username_set);
   return new;
 end; $$;
 create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();

@@ -1,6 +1,6 @@
 import { demo } from "./demo-data.js";
 import { configured, supabase, currentUser } from "./supabase.js";
-import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, createReply, updateReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken } from "./api.js";
+import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, createReply, updateReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword } from "./api.js";
 
 const main = document.querySelector("main"), modal = document.querySelector("#modal"), notice = document.querySelector("#notice");
 let activeProposals = [];
@@ -723,10 +723,28 @@ async function router(){
   nav();
   let hash = location.hash.slice(1);
   if (hash.includes("access_token=") || hash.includes("error=")) {
+    if (hash.includes("type=recovery")) {
+      location.hash = "#restablecer-contrasena";
+      return;
+    }
     location.hash = "#";
     return;
   }
   let [route,id]=hash.split("/");
+
+  let u = await currentUser();
+  if (u) {
+    try {
+      const profile = await getCurrentUserProfile();
+      if (profile && !profile.username_set && route !== "establecer-username") {
+        location.hash = "#establecer-username";
+        return;
+      }
+    } catch (err) {
+      console.error("Error checking profile username_set:", err);
+    }
+  }
+
   try{
     if(route==="foro")await forum(id);
     else if(route==="archivo") {if(id)await archiveDetail(id);else await archive()}
@@ -738,11 +756,116 @@ async function router(){
     else if(route==="buscar")await searchPage(id);
     else if(route==="moderacion")await moderationPage();
     else if(route==="ingresar")await ingresarPage();
+    else if(route==="establecer-username")await establecerUsernamePage();
+    else if(route==="restablecer-contrasena")await restablecerContrasenaPage();
     else await home();
   }catch(e){
     console.error(e);
     flash("No pudimos cargar este contenido.");
   }
+}
+
+async function establecerUsernamePage() {
+  const u = await currentUser();
+  if (!u) {
+    location.hash = "#ingresar";
+    return;
+  }
+  
+  const profile = await getCurrentUserProfile();
+  if (profile && profile.username_set) {
+    location.hash = "#";
+    return;
+  }
+
+  main.innerHTML = `
+    <section class="page-head" style="text-align: center;">
+      <div class="eyebrow">Configuración</div>
+      <h1>Elige tu nombre de usuario</h1>
+      <p>Para completar tu registro, por favor elige un nombre de usuario único.</p>
+    </section>
+    <section class="forum-layout" style="max-width: 480px; margin: auto; padding-bottom: 5rem;">
+      <div class="sidebar-box" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
+        <form id="username-setup-form">
+          <div class="form-row">
+            <label for="setup-username">Nombre de usuario (username)</label>
+            <input class="input" type="text" id="setup-username" required placeholder="ej. Kepler_88" pattern="^[a-zA-Z0-9_]{3,30}$" title="De 3 a 30 caracteres. Solo letras, números y guión bajo (_).">
+            <small class="muted" style="display: block; margin-top: 0.25rem; font-size: 0.75rem;">De 3 a 30 caracteres. Solo letras, números y guión bajo (_).</small>
+          </div>
+          <button class="button" style="width: 100%; margin-top: 1rem; padding: 0.8rem;">Guardar y continuar</button>
+        </form>
+        <div style="text-align: center; margin-top: 1.5rem;">
+          <button class="button button-quiet" id="cancel-setup-btn" style="color: var(--muted); font-size: 0.9rem;">Cerrar sesión</button>
+        </div>
+      </div>
+    </section>
+  `;
+
+  document.getElementById("username-setup-form").onsubmit = async e => {
+    e.preventDefault();
+    const newUsername = document.getElementById("setup-username").value.trim();
+    try {
+      await updateProfileUsername(newUsername);
+      flash("¡Nombre de usuario guardado!");
+      await updateAuth();
+      location.hash = "#";
+    } catch (err) {
+      flash("Error: " + err.message);
+    }
+  };
+
+  document.getElementById("cancel-setup-btn").onclick = async () => {
+    if (supabase) {
+      await supabase.auth.signOut();
+      flash("Sesión cerrada.");
+      await updateAuth();
+      location.hash = "#ingresar";
+    }
+  };
+}
+
+async function restablecerContrasenaPage() {
+  const u = await currentUser();
+  if (!u) {
+    flash("Enlace no válido o expirado. Por favor solicita el restablecimiento de contraseña de nuevo.");
+    location.hash = "#ingresar";
+    return;
+  }
+
+  main.innerHTML = `
+    <section class="page-head" style="text-align: center;">
+      <div class="eyebrow">Seguridad</div>
+      <h1>Nueva contraseña</h1>
+      <p>Establece una nueva contraseña para tu cuenta.</p>
+    </section>
+    <section class="forum-layout" style="max-width: 480px; margin: auto; padding-bottom: 5rem;">
+      <div class="sidebar-box" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
+        <form id="reset-password-form">
+          <div class="form-row">
+            <label for="reset-new-password">Nueva contraseña</label>
+            <input class="input" type="password" id="reset-new-password" required minlength="6" placeholder="Mínimo 6 caracteres">
+          </div>
+          <button class="button" style="width: 100%; margin-top: 1rem; padding: 0.8rem;">Actualizar contraseña</button>
+        </form>
+      </div>
+    </section>
+  `;
+
+  document.getElementById("reset-password-form").onsubmit = async e => {
+    e.preventDefault();
+    const newPassword = document.getElementById("reset-new-password").value;
+    try {
+      await updateUserPassword(newPassword);
+      flash("Tu contraseña ha sido actualizada. Por favor inicia sesión con tu nueva contraseña.");
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+      await updateAuth();
+      location.hash = "#ingresar";
+    } catch (err) {
+      flash("Error: " + err.message);
+    }
+  };
 }
 
 async function ingresarPage() {
@@ -757,13 +880,28 @@ async function ingresarPage() {
         <h1>Sesión iniciada</h1>
         <p>Hola, <strong>${esc(username)}</strong>. Estás conectado con el correo ${esc(u.email)}.</p>
       </section>
-      <section class="forum-layout" style="max-width: 480px; margin: auto; padding-bottom: 5rem;">
+      <section class="forum-layout" style="max-width: 480px; margin: auto; padding-bottom: 5rem; display: flex; flex-direction: column; gap: 2rem;">
+        <div class="sidebar-box" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
+          <h3 style="margin-bottom: 1rem; font-family: var(--serif); text-align: center;">Seguridad</h3>
+          <p class="muted" style="font-size: 0.9rem; margin-bottom: 1.5rem; text-align: center;">Para cambiar tu contraseña, te enviaremos un correo electrónico de verificación.</p>
+          <button class="button" id="reset-password-request-btn" style="width: 100%; padding: 0.8rem;">Enviar correo de cambio de contraseña</button>
+        </div>
+
         <div class="sidebar-box" style="text-align: center; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
-          <h3 style="margin-bottom: 1.5rem; font-family: var(--serif);">¿Deseas cerrar tu sesión actual?</h3>
+          <h3 style="margin-bottom: 1.5rem; font-family: var(--serif);">Cerrar Sesión</h3>
           <button class="button btn-danger" id="logout-btn" style="width: 100%; padding: 0.8rem;">Cerrar Sesión</button>
         </div>
       </section>
     `;
+    
+    document.getElementById("reset-password-request-btn").onclick = async () => {
+      try {
+        await sendPasswordResetEmail(u.email);
+        flash("Correo de restablecimiento enviado. Por favor verifica tu bandeja de entrada.");
+      } catch (err) {
+        flash("Error: " + err.message);
+      }
+    };
     
     document.getElementById("logout-btn").onclick = async () => {
       if (supabase) {

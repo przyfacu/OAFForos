@@ -410,4 +410,47 @@ export async function checkUsernameTaken(username) {
   return !!data;
 }
 
+export async function updateProfileUsername(newUsername) {
+  if (!supabase) throw new Error("Configurá Supabase.");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("No has iniciado sesión.");
+
+  const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
+  if (!usernameRegex.test(newUsername)) {
+    throw new Error("El username debe tener entre 3 y 30 caracteres (letras, números y guión bajo).");
+  }
+
+  const taken = await checkUsernameTaken(newUsername);
+  if (taken) {
+    throw new Error(`El nombre de usuario '${newUsername}' ya está en uso.`);
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ username: newUsername, username_set: true })
+    .eq("id", user.id);
+
+  if (error) throw error;
+}
+
+export async function sendPasswordResetEmail(email) {
+  if (!supabase) throw new Error("Configurá Supabase.");
+  const redirectUrl = window.location.hostname === 'localhost'
+    ? window.location.origin
+    : 'https://oaf-foros.vercel.app';
+  
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: redirectUrl
+  });
+  if (error) throw error;
+}
+
+export async function updateUserPassword(newPassword) {
+  if (!supabase) throw new Error("Configurá Supabase.");
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword
+  });
+  if (error) throw error;
+}
+
 
