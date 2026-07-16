@@ -222,7 +222,7 @@ async function problem(id){
       discussionHTML = `<p class="muted">Este problema todavía no tiene una discusión asociada. <button class="button button-quiet" id="reply-auth-btn" style="margin-top:0.5rem; display:block;">Ingresá para iniciar la discusión</button></p>`;
     }
   }
-  main.innerHTML=`<article class="topic"><div class="eyebrow">${esc(p.source)}</div><h1>Problema ${p.number}: ${esc(p.title)}</h1><div class="topic-body">${md(p.statement)}</div>${discussionHTML}<p class="muted" style="margin-top:2rem;">Las soluciones pueden contener spoilers y se muestran ocultas por defecto.</p></article>`;
+  main.innerHTML=`<article class="topic"><div class="eyebrow">${esc(p.source)}</div><h1>Problema ${p.number}: ${esc(p.title)}</h1><div class="topic-body">${md(p.statement)}</div>${renderAttachments(p.attachments || [])}${discussionHTML}<p class="muted" style="margin-top:2rem;">Las soluciones pueden contener spoilers y se muestran ocultas por defecto.</p></article>`;
 }
 
 async function topic(id){
@@ -378,7 +378,13 @@ async function newTopic(problemId){
       const files = topicUploader.getFiles();
       if (files.length > 0) {
         try {
-          await uploadAttachments(files, "topic", row.id);
+          const uploaded = await uploadAttachments(files, "topic", row.id);
+          if (!supabase) {
+            const topicObj = demo.topics.find(t => t.id === row.id);
+            if (topicObj) {
+              topicObj.attachments = uploaded;
+            }
+          }
         } catch(uploadErr) {
           flash("Tema publicado, pero hubo un error al subir los archivos: " + uploadErr.message);
         }
@@ -429,16 +435,70 @@ function about(){
 }
 
 function propose(){
-  main.innerHTML=`<section class="new-topic"><div class="eyebrow">Archivo de enunciados</div><h1>Proponer una entrada</h1><p class="muted">Las propuestas se revisan antes de aparecer en el archivo. Incluí la fuente para que el equipo pueda verificarla.</p><form id="proposal-form"><div class="form-row"><label for="competition">Competencia y edición</label><input class="input" id="competition" required placeholder="Ej.: OAF, instancia nacional 2024"></div><div class="form-row"><label for="level">Nivel y número del problema</label><input class="input" id="level" required placeholder="Ej.: Nivel 2, problema 3"></div><div class="form-row"><label for="source">Enlace a la fuente</label><input class="input" id="source" type="url" placeholder="https://…"></div><div class="form-row"><label for="statement">Enunciado o corrección propuesta</label><textarea id="statement" required></textarea></div><button class="button">Enviar para revisión</button></form></section>`;
+  main.innerHTML=`<section class="new-topic">
+    <div class="eyebrow">Archivo de enunciados</div>
+    <h1>Proponer una entrada</h1>
+    <p class="muted">Las propuestas se revisan antes de aparecer en el archivo. Incluí la fuente para que el equipo pueda verificarla.</p>
+    <form id="proposal-form">
+      <div class="form-row">
+        <label for="competition">Competencia y edición</label>
+        <input class="input" id="competition" required placeholder="Ej.: OAF, instancia nacional 2024">
+      </div>
+      <div class="form-row">
+        <label for="level">Nivel y número del problema</label>
+        <input class="input" id="level" required placeholder="Ej.: Nivel 2, problema 3">
+      </div>
+      <div class="form-row">
+        <label for="source">Enlace a la fuente</label>
+        <input class="input" id="source" type="url" placeholder="https://…">
+      </div>
+      <div class="form-row">
+        <label for="statement">Enunciado o corrección propuesta</label>
+        <textarea id="statement" required></textarea>
+      </div>
+      ${buildAttachmentUploaderHTML("proposal-files")}
+      <button class="button" style="margin-top:0.8rem;">Enviar para revisión</button>
+    </form>
+  </section>`;
+
+  const proposalUploader = initAttachmentUploader("proposal-files");
+
   document.querySelector("#proposal-form").onsubmit=async e=>{
     e.preventDefault();
-    let f=e.target;
+    const submitBtn = e.target.querySelector(".button");
     try{
-      await createArchiveProposal({competition:f.competition.value,level:f.level.value,source_url:f.source.value,statement:f.statement.value});
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Enviando..."; }
+      let f=e.target;
+      const proposalPayload = {
+        competition: f.competition.value,
+        level: f.level.value,
+        source_url: f.source.value,
+        statement: f.statement.value
+      };
+      const newProp = await createArchiveProposal(proposalPayload);
+      
+      // Upload attachments if any
+      const files = proposalUploader.getFiles();
+      if (files.length > 0) {
+        try {
+          const uploaded = await uploadAttachments(files, "proposal", newProp.id);
+          proposalPayload.attachments = uploaded;
+          if (supabase) {
+            await supabase.from("archive_proposals").update({ proposal: proposalPayload }).eq("id", newProp.id);
+          } else {
+            const prop = demo.proposals.find(p => p.id === newProp.id);
+            if (prop) prop.proposal = proposalPayload;
+          }
+        } catch(uploadErr) {
+          flash("Propuesta enviada, pero hubo un error al subir los archivos: " + uploadErr.message);
+        }
+      }
+
       flash("Propuesta enviada para revisión.");
-      location.hash="#archivo"
+      location.hash="#archivo";
     }catch(err){
-      flash(err.message)
+      flash(err.message);
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Enviar para revisión"; }
     }
   }
 }
@@ -529,6 +589,7 @@ async function moderationPage() {
           <p style="font-size:0.9rem; margin:0.3rem 0;"><strong>Ubicación:</strong> ${esc(p.proposal.level)}</p>
           ${p.proposal.source_url ? `<p style="font-size:0.9rem; margin:0.3rem 0;"><strong>Fuente:</strong> <a href="${esc(p.proposal.source_url)}" target="_blank">${esc(p.proposal.source_url)}</a></p>` : ''}
           <div style="background:var(--pale); padding:0.8rem; font-size:0.9rem; font-family:var(--mono); white-space:pre-wrap; margin:0.5rem 0; border:1px solid var(--line);">${esc(p.proposal.statement)}</div>
+          ${renderAttachments(p.proposal.attachments || [])}
           <div style="display:flex; gap:0.5rem; margin-top:0.8rem;">
             <button class="button btn-approve-proposal" data-id="${p.id}">Aprobar</button>
             <button class="button button-quiet btn-reject-proposal" data-id="${p.id}">Rechazar</button>
@@ -1441,7 +1502,16 @@ main.addEventListener("submit", async e => {
         const files = window.__replyUploader.getFiles();
         if (files.length > 0) {
           try {
-            await uploadAttachments(files, "reply", reply.id);
+            const uploaded = await uploadAttachments(files, "reply", reply.id);
+            if (!supabase) {
+              const topicObj = demo.topics.find(t => t.id === topicId);
+              if (topicObj) {
+                const replyObj = topicObj.responses.find(r => r.id === reply.id);
+                if (replyObj) {
+                  replyObj.attachments = uploaded;
+                }
+              }
+            }
           } catch(uploadErr) {
             flash("Respuesta publicada, pero error al subir archivos: " + uploadErr.message);
           }

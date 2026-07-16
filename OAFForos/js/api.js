@@ -29,7 +29,7 @@ export async function getTopics(category) {
 
 export async function getTopic(id) {
   if (!supabase) return demo.topics.find(t => t.id === id);
-  const { data, error } = await supabase.from("topics").select("*,profiles(username),topic_tags(tags(name)),replies(*,profiles(username))").eq("id", id).single();
+  const { data, error } = await supabase.from("topics").select("*,profiles(username),topic_tags(tags(name)),attachments(*),replies(*,profiles(username),attachments(*))").eq("id", id).single();
   if (error) throw error;
   return {
     id: data.id,
@@ -40,13 +40,21 @@ export async function getTopic(id) {
     created: new Date(data.created_at).toLocaleDateString("es-AR"),
     body: data.body,
     tags: data.topic_tags?.map(x => x.tags?.name).filter(Boolean) || [],
+    attachments: (data.attachments || []).map(att => ({
+      ...att,
+      url: getPublicAttachmentUrl(att.path)
+    })),
     responses: data.replies.filter(r => r.status === "published").map(r => ({
       id: r.id,
       author: r.profiles?.username || "miembro",
       authorId: r.author_id,
       created: new Date(r.created_at).toLocaleDateString("es-AR"),
       body: r.body,
-      isSpoiler: r.is_spoiler
+      isSpoiler: r.is_spoiler,
+      attachments: (r.attachments || []).map(att => ({
+        ...att,
+        url: getPublicAttachmentUrl(att.path)
+      }))
     }))
   };
 }
@@ -207,9 +215,20 @@ export async function archiveChildren(id) {
 
 export async function getProblem(id) {
   if (!supabase) return demo.problems.find(x=>x.id===id);
-  const {data,error}=await supabase.from("problems").select("*,topics(id)").eq("id",id).single();
+  const {data,error}=await supabase.from("problems").select("*,topics(id),attachments(*)").eq("id",id).single();
   if(error) throw error;
-  return {id:data.id,number:data.number,title:data.title,statement:data.statement,source:data.source_url || "Archivo OAFForos",topicId:Array.isArray(data.topics) ? data.topics[0]?.id : data.topics?.id};
+  return {
+    id:data.id,
+    number:data.number,
+    title:data.title,
+    statement:data.statement,
+    source:data.source_url || "Archivo OAFForos",
+    topicId:Array.isArray(data.topics) ? data.topics[0]?.id : data.topics?.id,
+    attachments: (data.attachments || []).map(att => ({
+      ...att,
+      url: getPublicAttachmentUrl(att.path)
+    }))
+  };
 }
 
 export async function getCompetitionTypes() {
@@ -241,9 +260,32 @@ export async function getLevels(editionId) {
 }
 
 export async function publishProblem(proposalId, data) {
-  if (!supabase) return { id: "problem-demo" };
+  if (!supabase) {
+    const newId = "problem-" + Math.random().toString(36).substr(2, 9);
+    const prop = (demo.proposals || []).find(p => p.id === proposalId);
+    const newProblem = {
+      id: newId,
+      level: data.levelId || "oaf-2024-n2",
+      number: parseInt(data.problemNumber),
+      title: data.problemTitle,
+      statement: data.problemStatement,
+      source: data.problemSourceUrl || "Archivo OAFForos",
+      attachments: prop?.proposal?.attachments || []
+    };
+    demo.problems.push(newProblem);
+    if (prop) {
+      prop.status = "approved";
+      prop.proposal.reviewerNote = data.reviewerNote || "";
+    }
+    return newProblem;
+  }
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Debes iniciar sesión.");
+
+  // Fetch proposal to copy attachments
+  const { data: proposalRow, error: fetchPropError } = await supabase.from("archive_proposals").select("proposal").eq("id", proposalId).single();
+  if (fetchPropError) throw fetchPropError;
+  const proposalAttachments = proposalRow.proposal?.attachments || [];
 
   // 1. Competition Type
   let typeId = data.competitionTypeId;
@@ -316,6 +358,19 @@ export async function publishProblem(proposalId, data) {
   }).select("id").single();
   if (problemError) throw problemError;
 
+  // Link attachments to problem in DB
+  if (proposalAttachments.length > 0) {
+    const attachmentRows = proposalAttachments.map(att => ({
+      problem_id: newProblem.id,
+      name: att.name,
+      path: att.path,
+      type: att.type,
+      size: att.size
+    }));
+    const { error: attError } = await supabase.from("attachments").insert(attachmentRows);
+    if (attError) console.error("Error linking attachments to problem:", attError);
+  }
+
   // 6. Update Proposal Status
   const { error: proposalError } = await supabase.from("archive_proposals").update({
     status: "approved",
@@ -329,11 +384,24 @@ export async function publishProblem(proposalId, data) {
 }
 
 export async function createArchiveProposal(proposal) {
-  if (!supabase) throw new Error("Configurá Supabase para enviar propuestas.");
+  if (!supabase) {
+    const newId = "prop-" + Math.random().toString(36).substr(2, 9);
+    demo.proposals = demo.proposals || [];
+    const newProp = {
+      id: newId,
+      author: "miembro_demo",
+      created: new Date().toLocaleDateString("es-AR"),
+      proposal: proposal,
+      status: "pending"
+    };
+    demo.proposals.push(newProp);
+    return newProp;
+  }
   const {data:{user}}=await supabase.auth.getUser();
   if(!user) throw new Error("Ingresá para enviar una propuesta.");
-  const {error}=await supabase.from("archive_proposals").insert({author_id:user.id,proposal});
+  const {data, error}=await supabase.from("archive_proposals").insert({author_id:user.id,proposal}).select("id").single();
   if(error) throw error;
+  return data;
 }
 
 export async function getCurrentUserProfile() {
@@ -356,7 +424,9 @@ export async function getCurrentUserProfile() {
 }
 
 export async function getArchiveProposals() {
-  if (!supabase) return [];
+  if (!supabase) {
+    return (demo.proposals || []).filter(p => p.status === "pending");
+  }
   const { data, error } = await supabase.from("archive_proposals")
     .select("*,profiles!author_id(username)")
     .eq("status", "pending")
@@ -372,7 +442,14 @@ export async function getArchiveProposals() {
 }
 
 export async function updateProposalStatus(id, status, note = "") {
-  if (!supabase) return;
+  if (!supabase) {
+    const prop = demo.proposals?.find(p => p.id === id);
+    if (prop) {
+      prop.status = status;
+      prop.proposal.reviewerNote = note;
+    }
+    return;
+  }
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from("archive_proposals")
     .update({ status, reviewer_note: note, reviewer_id: user.id, reviewed_at: new Date().toISOString() })
@@ -500,6 +577,25 @@ export async function uploadAttachments(files, context, contextId) {
     const { data: urlData } = supabase.storage
       .from("attachments")
       .getPublicUrl(path);
+
+    // Save metadata to database public.attachments table (only if context is not proposal)
+    if (context === "topic" || context === "reply" || context === "problem") {
+      const attachmentRow = {
+        name: file.name,
+        path,
+        type: file.type,
+        size: file.size
+      };
+      if (context === "topic") attachmentRow.topic_id = contextId;
+      else if (context === "reply") attachmentRow.reply_id = contextId;
+      else if (context === "problem") attachmentRow.problem_id = contextId;
+
+      const { error: dbError } = await supabase.from("attachments").insert(attachmentRow);
+      if (dbError) {
+        console.error("Error saving attachment to database:", dbError);
+        throw dbError;
+      }
+    }
 
     results.push({
       name: file.name,

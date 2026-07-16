@@ -55,3 +55,47 @@ USING (
   bucket_id = 'attachments'
   AND auth.uid() = owner
 );
+
+
+-- 5. Crear tabla de metadatos de adjuntos en la base de datos (public.attachments)
+CREATE TABLE IF NOT EXISTS public.attachments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  topic_id uuid REFERENCES public.topics(id) ON DELETE CASCADE,
+  reply_id uuid REFERENCES public.replies(id) ON DELETE CASCADE,
+  problem_id uuid REFERENCES public.problems(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  path text NOT NULL UNIQUE,
+  type text NOT NULL,
+  size integer NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT attachments_context_check CHECK (
+    (topic_id IS NOT NULL)::int +
+    (reply_id IS NOT NULL)::int +
+    (problem_id IS NOT NULL)::int = 1
+  )
+);
+
+-- Habilitar RLS en public.attachments
+ALTER TABLE public.attachments ENABLE ROW LEVEL SECURITY;
+
+-- Política de la base de datos: Lectura pública (cualquier visitante puede leer los metadatos de adjuntos)
+CREATE POLICY "attachments_db_public_read"
+ON public.attachments
+FOR SELECT
+USING (true);
+
+-- Política de la base de datos: Inserción para usuarios autenticados
+CREATE POLICY "attachments_db_authenticated_insert"
+ON public.attachments
+FOR INSERT
+WITH CHECK (
+  auth.role() = 'authenticated'
+);
+
+-- Política de la base de datos: Borrado para usuarios autenticados
+CREATE POLICY "attachments_db_authenticated_delete"
+ON public.attachments
+FOR DELETE
+USING (
+  auth.role() = 'authenticated'
+);
