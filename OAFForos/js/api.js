@@ -228,7 +228,7 @@ export async function archiveChildren(id) {
 
 export async function getProblem(id) {
   if (!supabase) return demo.problems.find(x=>x.id===id);
-  const {data,error}=await supabase.from("problems").select("*,topics(id),attachments!problem_id(*)").eq("id",id).single();
+  const {data,error}=await supabase.from("problems").select("*,topics!problem_id(id),attachments!problem_id(*)").eq("id",id).single();
   if(error) throw error;
   return {
     id:data.id,
