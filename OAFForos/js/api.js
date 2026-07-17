@@ -29,7 +29,7 @@ export async function getTopics(category) {
 
 export async function getTopic(id) {
   if (!supabase) return demo.topics.find(t => t.id === id);
-  const { data, error } = await supabase.from("topics").select("*,profiles(username),topic_tags(tags(name)),attachments(*),replies(*,profiles(username),attachments(*))").eq("id", id).single();
+  const { data, error } = await supabase.from("topics").select("*,profiles(username),topic_tags(tags(name)),attachments!topic_id(*),replies(*,profiles(username),attachments!reply_id(*))").eq("id", id).single();
   if (error) throw error;
   return {
     id: data.id,
@@ -92,6 +92,12 @@ export async function createTopic(payload) {
   if (!user) throw new Error("Ingresá para publicar.");
   
   const { tags, ...topicData } = payload;
+  
+  // No incluir problem_id si es null para evitar conflictos de constraint unique
+  if (topicData.problem_id === null || topicData.problem_id === undefined) {
+    delete topicData.problem_id;
+  }
+  
   const { data, error } = await supabase.from("topics").insert({...topicData, author_id:user.id}).select("id").single();
   if (error) throw error;
   
@@ -103,16 +109,23 @@ export async function createTopic(payload) {
         if (existingTag) {
           tagId = existingTag.id;
         } else {
+          // Intentar insertar el tag; puede fallar si el usuario no tiene permisos
           const { data: newTag, error: tagError } = await supabase.from("tags").insert({ name: tagName }).select("id").single();
-          if (!tagError && newTag) {
+          if (tagError) {
+            console.warn("No se pudo crear la etiqueta '" + tagName + "' (puede ser una etiqueta existente o falta de permisos):", tagError.message);
+            // Intentar buscarla de nuevo por si fue creada por una carrera
+            const { data: retryTag } = await supabase.from("tags").select("id").eq("name", tagName).maybeSingle();
+            if (retryTag) tagId = retryTag.id;
+          } else if (newTag) {
             tagId = newTag.id;
           }
         }
         if (tagId) {
-          await supabase.from("topic_tags").insert({ topic_id: data.id, tag_id: tagId });
+          const { error: ttError } = await supabase.from("topic_tags").insert({ topic_id: data.id, tag_id: tagId });
+          if (ttError) console.warn("No se pudo asignar la etiqueta '" + tagName + "':", ttError.message);
         }
       } catch (err) {
-        console.error("Error inserting tag:", tagName, err);
+        console.error("Error procesando etiqueta:", tagName, err);
       }
     }
   }
@@ -215,7 +228,7 @@ export async function archiveChildren(id) {
 
 export async function getProblem(id) {
   if (!supabase) return demo.problems.find(x=>x.id===id);
-  const {data,error}=await supabase.from("problems").select("*,topics(id),attachments(*)").eq("id",id).single();
+  const {data,error}=await supabase.from("problems").select("*,topics(id),attachments!problem_id(*)").eq("id",id).single();
   if(error) throw error;
   return {
     id:data.id,
@@ -592,8 +605,12 @@ export async function uploadAttachments(files, context, contextId) {
 
       const { error: dbError } = await supabase.from("attachments").insert(attachmentRow);
       if (dbError) {
-        console.error("Error saving attachment to database:", dbError);
-        throw dbError;
+        // Si la tabla attachments no existe o hay un error de permisos, advertir pero no bloquear la publicación
+        console.error("Error saving attachment metadata to database (el archivo fue subido al storage igualmente):", dbError.message);
+        // Solo lanzar si es un error de permisos explícito, no de esquema faltante
+        if (dbError.code !== "42P01" && dbError.code !== "PGRST200") {
+          throw dbError;
+        }
       }
     }
 

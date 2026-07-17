@@ -138,6 +138,7 @@ create policy "staff update profiles" on public.profiles for update using (publi
 create policy "public read categories" on public.categories for select using (is_active or public.is_staff());
 create policy "staff manage categories" on public.categories for all using (public.is_staff()) with check (public.is_staff());
 create policy "public read tags" on public.tags for select using (true);
+create policy "members create tags" on public.tags for insert to authenticated with check (true);
 create policy "staff manage tags" on public.tags for all using (public.is_staff()) with check (public.is_staff());
 create policy "read published topics" on public.topics for select using (status in ('published','closed') or author_id=auth.uid() or public.is_staff());
 create policy "members create topics" on public.topics for insert with check (auth.uid()=author_id and status='published');
