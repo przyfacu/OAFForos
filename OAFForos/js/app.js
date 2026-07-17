@@ -369,7 +369,6 @@ async function newTopic(problemId){
         category_id:f.category.value,
         title:f.title.value,
         body:f.body.value,
-        status:"published",
         tags: tagsList,
         problem_id: problemId || null
       });
