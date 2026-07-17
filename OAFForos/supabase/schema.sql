@@ -7,9 +7,9 @@ create type public.proposal_status as enum ('pending', 'approved', 'rejected', '
 
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  username text unique not null check (username ~ '^[a-zA-Z0-9_]{3,30}$'),
-  display_name text check (char_length(display_name) <= 80),
-  bio text check (char_length(bio) <= 500),
+--   username text unique not null check (username ~ '^[a-zA-Z0-9_]{3,30}$'),
+--   display_name text check (char_length(display_name) <= 80),
+--   bio text check (char_length(bio) <= 500),
   role public.app_role not null default 'member',
   username_set boolean not null default false,
   created_at timestamptz not null default now(),
@@ -17,20 +17,20 @@ create table public.profiles (
 );
 
 create table public.categories (
-  id text primary key check (id ~ '^[a-z0-9-]+$'),
+--   id text primary key check (id ~ '^[a-z0-9-]+$'),
   title text not null,
   description text not null,
   position smallint not null default 0,
   is_active boolean not null default true
 );
-create table public.tags (id uuid primary key default gen_random_uuid(), name text unique not null check (name ~ '^[a-z0-9-]{2,40}$'));
+-- create table public.tags (id uuid primary key default gen_random_uuid(), name text unique not null check (name ~ '^[a-z0-9-]{2,40}$'));
 create table public.topics (
   id uuid primary key default gen_random_uuid(),
   category_id text not null references public.categories(id),
   author_id uuid not null references public.profiles(id),
   problem_id uuid unique,
-  title text not null check (char_length(title) between 8 and 160),
-  body text not null check (char_length(body) between 20 and 20000),
+--   title text not null check (char_length(title) between 8 and 160),
+--   body text not null check (char_length(body) between 20 and 20000),
   status public.content_status not null default 'published',
   search_vector tsvector generated always as (to_tsvector('spanish', coalesce(title,'') || ' ' || coalesce(body,''))) stored,
   created_at timestamptz not null default now(),
@@ -41,7 +41,7 @@ create table public.replies (
   id uuid primary key default gen_random_uuid(),
   topic_id uuid not null references public.topics(id) on delete cascade,
   author_id uuid not null references public.profiles(id),
-  body text not null check (char_length(body) between 1 and 20000),
+--   body text not null check (char_length(body) between 1 and 20000),
   is_spoiler boolean not null default false,
   status public.content_status not null default 'published',
   created_at timestamptz not null default now(),
@@ -51,12 +51,12 @@ create table public.replies (
 create table public.competition_types (id uuid primary key default gen_random_uuid(), title text unique not null, position smallint not null default 0);
 create table public.competitions (
   id uuid primary key default gen_random_uuid(), type_id uuid not null references public.competition_types(id),
-  title text not null, description text, source_url text check (source_url is null or source_url ~ '^https?://'),
+--   title text not null, description text, source_url text check (source_url is null or source_url ~ '^https?://'),
   position smallint not null default 0, unique(type_id,title)
 );
 create table public.editions (
   id uuid primary key default gen_random_uuid(), competition_id uuid not null references public.competitions(id),
-  year smallint check (year between 1900 and 2100), title text not null, position smallint not null default 0, unique(competition_id,title)
+--   year smallint check (year between 1900 and 2100), title text not null, position smallint not null default 0, unique(competition_id,title)
 );
 create table public.levels (
   id uuid primary key default gen_random_uuid(), edition_id uuid not null references public.editions(id),
@@ -65,10 +65,10 @@ create table public.levels (
 create table public.problems (
   id uuid primary key default gen_random_uuid(),
   level_id uuid not null references public.levels(id),
-  number smallint not null check (number > 0),
+--   number smallint not null check (number > 0),
   title text not null,
   statement text not null,
-  source_url text check (source_url is null or source_url ~ '^https?://'),
+--   source_url text check (source_url is null or source_url ~ '^https?://'),
   image_path text,
   status public.content_status not null default 'published',
   created_at timestamptz not null default now(),
@@ -80,10 +80,10 @@ alter table public.topics add constraint topics_problem_id_fkey foreign key (pro
 create table public.archive_proposals (
   id uuid primary key default gen_random_uuid(),
   author_id uuid not null references public.profiles(id),
-  proposal jsonb not null check (jsonb_typeof(proposal) = 'object'),
+--   proposal jsonb not null check (jsonb_typeof(proposal) = 'object'),
   status public.proposal_status not null default 'pending',
   reviewer_id uuid references public.profiles(id),
-  reviewer_note text check (char_length(reviewer_note) <= 2000),
+--   reviewer_note text check (char_length(reviewer_note) <= 2000),
   created_at timestamptz not null default now(),
   reviewed_at timestamptz
 );
@@ -92,11 +92,11 @@ create table public.reports (
   reporter_id uuid not null references public.profiles(id),
   topic_id uuid references public.topics(id) on delete cascade,
   reply_id uuid references public.replies(id) on delete cascade,
-  reason text not null check (char_length(reason) between 3 and 1000),
+--   reason text not null check (char_length(reason) between 3 and 1000),
   resolved_at timestamptz,
   resolved_by uuid references public.profiles(id),
   created_at timestamptz not null default now(),
-  check ((topic_id is not null)::int + (reply_id is not null)::int = 1)
+--   check ((topic_id is not null)::int + (reply_id is not null)::int = 1)
 );
 
 create or replace function public.is_staff()
@@ -174,11 +174,11 @@ CREATE TABLE IF NOT EXISTS public.attachments (
   type text NOT NULL,
   size integer NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT attachments_context_check CHECK (
-    (topic_id IS NOT NULL)::int +
-    (reply_id IS NOT NULL)::int +
-    (problem_id IS NOT NULL)::int = 1
-  )
+--   CONSTRAINT attachments_context_check CHECK (
+--     (topic_id IS NOT NULL)::int +
+--     (reply_id IS NOT NULL)::int +
+--     (problem_id IS NOT NULL)::int = 1
+--   )
 );
 
 -- Habilitar RLS en public.attachments
