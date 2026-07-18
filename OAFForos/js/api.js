@@ -11,7 +11,7 @@ export async function getCategories() {
 
 export async function getTopics(category) {
   if (!supabase) return demo.topics.filter(t => !category || t.category === category);
-  let query = supabase.from("topics").select("id,title,created_at,category_id,author_id,profiles(username),topic_tags(tags(name)),replies(count)").eq("status", "published").order("created_at", { ascending: false });
+  let query = supabase.from("topics").select("id,title,created_at,category_id,author_id,is_pinned,profiles(username),topic_tags(tags(name)),replies(count)").eq("status", "published").order("is_pinned", { ascending: false }).order("created_at", { ascending: false });
   if (category) query = query.eq("category_id", category);
   const { data, error } = await query;
   if (error) throw error;
@@ -23,7 +23,8 @@ export async function getTopics(category) {
     authorId: t.author_id,
     created: new Date(t.created_at).toLocaleDateString("es-AR"),
     replies: t.replies?.[0]?.count || 0,
-    tags: t.topic_tags?.map(x => x.tags?.name).filter(Boolean) || []
+    tags: t.topic_tags?.map(x => x.tags?.name).filter(Boolean) || [],
+    isPinned: t.is_pinned || false
   }));
 }
 
@@ -59,6 +60,7 @@ export async function getTopic(id) {
     category: data.category_id,
     created: new Date(data.created_at).toLocaleDateString("es-AR"),
     body: data.body,
+    isPinned: data.is_pinned || false,
     tags: data.topic_tags?.map(x => x.tags?.name).filter(Boolean) || [],
     attachments: (data.attachments || []).map(att => ({
       ...att,
@@ -162,6 +164,18 @@ export async function updateTopic(id, title, body) {
     return topic;
   }
   const { data, error } = await supabase.from("topics").update({ title, body }).eq("id", id).select("id").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function pinTopic(id, isPinned) {
+  if (!supabase) {
+    const topic = demo.topics.find(t => t.id === id);
+    if (!topic) throw new Error("Tema no encontrado.");
+    topic.isPinned = isPinned;
+    return topic;
+  }
+  const { data, error } = await supabase.from("topics").update({ is_pinned: isPinned }).eq("id", id).select("id").single();
   if (error) throw error;
   return data;
 }

@@ -1,6 +1,6 @@
 import { demo } from "./demo-data.js";
 import { configured, supabase, currentUser } from "./supabase.js";
-import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, deleteTopic, createReply, updateReply, deleteReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword, uploadAttachments, updateProblem } from "./api.js";
+import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, deleteTopic, pinTopic, createReply, updateReply, deleteReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword, uploadAttachments, updateProblem } from "./api.js";
 
 const main = document.querySelector("main"), modal = document.querySelector("#modal"), notice = document.querySelector("#notice");
 let activeProposals = [];
@@ -173,7 +173,7 @@ function initAttachmentUploader(inputId) {
   };
 }
 
-const topicRow = t => `<a class="topic-row" href="#tema/${t.id}"><span class="topic-count"><b>${t.replies ?? 0}</b>respuestas</span><span><h3>${esc(t.title)}</h3><span class="topic-meta">${esc(t.author)} · ${esc(t.created)}</span><br>${(t.tags||[]).map(x=>`<i class="tag">${esc(x)}</i>`).join("")}</span><span class="muted">›</span></a>`;
+const topicRow = t => `<a class="topic-row${t.isPinned ? ' topic-row--pinned' : ''}" href="#tema/${t.id}">${t.isPinned ? '<span class="pin-badge" title="Tema fijado">📌</span>' : ''}<span class="topic-count"><b>${t.replies ?? 0}</b>respuestas</span><span><h3>${esc(t.title)}</h3><span class="topic-meta">${esc(t.author)} · ${esc(t.created)}</span><br>${(t.tags||[]).map(x=>`<i class="tag">${esc(x)}</i>`).join("")}</span><span class="muted">›</span></a>`;
 
 const icons = { mecanica: "↗", electromagnetismo: "ϟ", termodinamica: "◌", ondas: "≈", moderna: "◈", comunidad: "○" };
 const getIcon = id => icons[id] || "○";
@@ -202,7 +202,19 @@ async function forum(category){
   const cat = categories.find(x=>x.id===category);
   const categoryName = cat?.title;
   const categoryDesc = cat?.description;
-  main.innerHTML=`<section class="page-head"><div class="eyebrow">Foro</div><h1>${esc(categoryName||"Preguntas que hacen avanzar")}</h1><p>${esc(categoryName?categoryDesc:"Un espacio para hacer preguntas, discutir soluciones y aprender con otros estudiantes y entrenadores.")}</p></section><section class="forum-layout"><div class="section-head"><span class="muted">${topics.length} temas</span><a class="button" href="#nuevo-tema">Crear tema</a></div>${!category?`<div class="category-list">${categories.map(c=>`<a class="category-card" href="#foro/${c.id}"><span class="category-icon">${getIcon(c.id)}</span><h2>${esc(c.title)}</h2><p>${esc(c.description)}</p></a>`).join("")}</div><h2 style="margin-top:3rem;font-family:var(--serif)">Actividad reciente</h2>`:""}<div class="feed">${topics.length?topics.map(topicRow).join(""):'<p class="empty">Todavía no hay temas en esta categoría.</p>'}</div></section>`;
+
+  const pinnedTopics = topics.filter(t => t.isPinned);
+  const regularTopics = topics.filter(t => !t.isPinned);
+
+  const pinnedSection = pinnedTopics.length ? `
+    <div class="pinned-section">
+      <div class="pinned-section-head"><span class="pin-label">📌 Temas fijados</span></div>
+      <div class="feed feed--pinned">${pinnedTopics.map(topicRow).join("")}</div>
+    </div>` : "";
+
+  main.innerHTML=`<section class="page-head"><div class="eyebrow">Foro</div><h1>${esc(categoryName||"Preguntas que hacen avanzar")}</h1><p>${esc(categoryName?categoryDesc:"Un espacio para hacer preguntas, discutir soluciones y aprender con otros estudiantes y entrenadores.")}</p></section><section class="forum-layout"><div class="section-head"><span class="muted">${topics.length} temas</span><a class="button" href="#nuevo-tema">Crear tema</a></div>${!category?`<div class="category-list">${categories.map(c=>`<a class="category-card" href="#foro/${c.id}"><span class="category-icon">${getIcon(c.id)}</span><h2>${esc(c.title)}</h2><p>${esc(c.description)}</p></a>`).join("")}</div><h2 style="margin-top:3rem;font-family:var(--serif)">Actividad reciente</h2>`:""}
+  ${pinnedSection}
+  <div class="feed">${regularTopics.length?regularTopics.map(topicRow).join(""):'<p class="empty">Todavía no hay temas en esta categoría.</p>'}</div></section>`;
 }
 
 async function archive(){
@@ -324,11 +336,17 @@ async function topic(id){
   if(!t){location.hash="#foro";return;}
   
   const user = await currentUser();
+  const profile = await getCurrentUserProfile();
+  const isStaff = profile && (profile.role === "moderator" || profile.role === "admin");
   let topicActions = "";
   if (user) {
     if (user.id === t.authorId) {
       topicActions += `<button class="action-btn edit-topic-btn" data-id="${t.id}">Editar</button> `;
       topicActions += `<button class="action-btn delete-topic-btn" data-id="${t.id}" style="color:var(--danger)">Borrar</button> `;
+    }
+    if (isStaff) {
+      const pinLabel = t.isPinned ? "📌 Desfijar" : "📌 Fijar";
+      topicActions += `<button class="action-btn pin-topic-btn" data-id="${t.id}" data-pinned="${t.isPinned ? '1' : '0'}">${pinLabel}</button> `;
     }
     topicActions += `<button class="action-btn report-btn" data-topic-id="${t.id}">Reportar</button>`;
   }
@@ -1509,6 +1527,23 @@ main.addEventListener("click", async e => {
       } catch (err) {
         flash("Error al eliminar el tema: " + err.message);
       }
+    }
+  }
+
+  // Fijar / Desfijar tema (solo moderadores y admin)
+  if (e.target.classList.contains("pin-topic-btn")) {
+    const topicId = e.target.getAttribute("data-id");
+    const currentlyPinned = e.target.getAttribute("data-pinned") === "1";
+    const newPinned = !currentlyPinned;
+    try {
+      e.target.disabled = true;
+      await pinTopic(topicId, newPinned);
+      flash(newPinned ? "Tema fijado." : "Tema desfijado.");
+      const [route, id] = location.hash.slice(1).split("/");
+      await topic(id);
+    } catch (err) {
+      flash("Error al fijar el tema: " + err.message);
+      e.target.disabled = false;
     }
   }
 
