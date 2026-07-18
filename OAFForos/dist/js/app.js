@@ -1,6 +1,6 @@
 import { demo } from "./demo-data.js";
 import { configured, supabase, currentUser } from "./supabase.js";
-import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, deleteTopic, pinTopic, createReply, updateReply, deleteReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword, uploadAttachments, updateProblem } from "./api.js";
+import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, deleteTopic, pinTopic, createReply, updateReply, deleteReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword, uploadAttachments, updateProblem, updateTopicModerated, searchUsersByUsername, deleteUserAndPosts, setUserRole } from "./api.js";
 
 const main = document.querySelector("main"), modal = document.querySelector("#modal"), notice = document.querySelector("#notice");
 let activeProposals = [];
@@ -338,27 +338,48 @@ async function topic(id){
   const user = await currentUser();
   const profile = await getCurrentUserProfile();
   const isStaff = profile && (profile.role === "moderator" || profile.role === "admin");
+  const isOwner = user && user.id === t.authorId;
   let topicActions = "";
   if (user) {
-    if (user.id === t.authorId) {
-      topicActions += `<button class="action-btn edit-topic-btn" data-id="${t.id}">Editar</button> `;
-      topicActions += `<button class="action-btn delete-topic-btn" data-id="${t.id}" style="color:var(--danger)">Borrar</button> `;
+    if (isOwner) {
+      topicActions += `<button class="action-btn edit-topic-btn" data-id="${t.id}" data-staff="0">Editar</button> `;
+      topicActions += `<button class="action-btn delete-topic-btn" data-id="${t.id}">Borrar</button> `;
     }
     if (isStaff) {
       const pinLabel = t.isPinned ? "📌 Desfijar" : "📌 Fijar";
       topicActions += `<button class="action-btn pin-topic-btn" data-id="${t.id}" data-pinned="${t.isPinned ? '1' : '0'}">${pinLabel}</button> `;
+      if (!isOwner) {
+        // Staff puede editar y borrar temas de otros usuarios
+        topicActions += `<button class="action-btn edit-topic-btn" data-id="${t.id}" data-staff="1" style="color:var(--blue)">✏️ Editar (mod)</button> `;
+        topicActions += `<button class="action-btn delete-topic-btn" data-id="${t.id}" style="color:var(--danger)">🗑️ Borrar (mod)</button> `;
+      }
     }
     topicActions += `<button class="action-btn report-btn" data-topic-id="${t.id}">Reportar</button>`;
+  }
+
+  // Cartelito de intervención de moderación
+  let moderationBadge = "";
+  if (t.moderatedBy || t.moderated_at) {
+    const modName = t.moderatedByUsername || t.moderatedBy || "moderación";
+    const modDate = t.moderated_at ? new Date(t.moderated_at).toLocaleDateString("es-AR") : (t.moderatedAt || "");
+    moderationBadge = `
+      <div class="mod-intervention-badge">
+        <span class="mod-badge-icon">🛡️</span>
+        <span>Este tema fue editado por el equipo de moderación${modName && modName !== t.moderatedBy ? ` (<strong>${esc(modName)}</strong>)` : ""}${modDate ? ` el ${esc(modDate)}` : ""}.</span>
+      </div>`;
   }
   
   let repliesHTML = "";
   if (t.responses && t.responses.length > 0) {
-    repliesHTML = t.responses.map(r=> {
+    repliesHTML = t.responses.map(r=>{
       let replyActions = "";
       if (user) {
         if (user.id === r.authorId) {
           replyActions += `<button class="action-btn edit-reply-btn" data-id="${r.id}">Editar</button> `;
           replyActions += `<button class="action-btn delete-reply-btn" data-id="${r.id}" style="color:var(--danger)">Borrar</button> `;
+        } else if (isStaff) {
+          replyActions += `<button class="action-btn edit-reply-btn" data-id="${r.id}" style="color:var(--blue)">✏️ Editar (mod)</button> `;
+          replyActions += `<button class="action-btn delete-reply-btn" data-id="${r.id}" style="color:var(--danger)">🗑️ Borrar (mod)</button> `;
         }
         replyActions += `<button class="action-btn report-btn" data-reply-id="${r.id}">Reportar</button>`;
       }
@@ -369,6 +390,11 @@ async function topic(id){
           <span>${esc(r.created)} ${replyActions}</span>
         </div>
         ${r.isSpoiler?`<details class="spoiler"><summary>Mostrar spoiler</summary><div class="reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div>${attachmentsHTML}</details>`:`<div class="reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div>${attachmentsHTML}`}
+      </section>`;
+    }).join("");
+  } else {
+    repliesHTML = '<p class="empty">Aún no hay respuestas en este tema.</p>';
+  }reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div>${attachmentsHTML}`}
       </section>`;
     }).join("");
   } else {
@@ -405,6 +431,7 @@ async function topic(id){
     <div class="eyebrow">Foro · ${esc(t.category||"Tema")}</div>
     <h1>${esc(t.title)}</h1>
     <p class="topic-meta">${esc(t.author)} · ${esc(t.created)} ${topicActions}</p>
+    ${moderationBadge}
     <div class="topic-body" data-raw="${esc(t.body)}">${md(t.body)}</div>
     ${renderAttachments(t.attachments || [])}
     <div style="margin-top:1rem; margin-bottom: 2rem;">
@@ -667,12 +694,13 @@ async function moderationPage() {
     location.hash = "#inicio";
     return;
   }
+  const isAdmin = profile.role === "admin";
   
   main.innerHTML = `
     <section class="page-head">
       <div class="eyebrow">Administración</div>
       <h1>Consola de moderación</h1>
-      <p>Revisá las propuestas de problemas recibidas y atendé los reportes de la comunidad.</p>
+      <p>Revisá las propuestas de problemas recibidas, atendé los reportes de la comunidad y gestioná los usuarios.</p>
     </section>
     <section class="forum-layout">
       <div class="two-column">
@@ -685,6 +713,30 @@ async function moderationPage() {
           <div id="reports-list">Cargando reportes...</div>
         </aside>
       </div>
+
+      <!-- Gestión de usuarios -->
+      <div style="margin-top:3rem; border-top:1px solid var(--line); padding-top:2.5rem;">
+        <h2 style="font-family:var(--serif); margin-bottom:1rem;">🗑️ Eliminar usuario</h2>
+        <p class="muted" style="margin-bottom:1rem; font-size:0.9rem;">Buscá un usuario por su nombre de usuario y eliminalo junto con todos sus posts.</p>
+        <div style="display:flex; gap:0.5rem; max-width:500px; margin-bottom:1rem;">
+          <input class="input" id="user-search-input" placeholder="Buscar por username..." style="flex:1;">
+          <button class="button" id="user-search-btn">Buscar</button>
+        </div>
+        <div id="user-search-results"></div>
+      </div>
+
+      ${isAdmin ? `
+      <!-- Solo admin: añadir moderadores -->
+      <div style="margin-top:3rem; border-top:1px solid var(--line); padding-top:2.5rem;">
+        <h2 style="font-family:var(--serif); margin-bottom:1rem;">🛡️ Gestionar moderadores</h2>
+        <p class="muted" style="margin-bottom:1rem; font-size:0.9rem;">Buscá un usuario por su username para ascenderlo a moderador o volver a member.</p>
+        <div style="display:flex; gap:0.5rem; max-width:500px; margin-bottom:1rem;">
+          <input class="input" id="mod-search-input" placeholder="Buscar por username..." style="flex:1;">
+          <button class="button" id="mod-search-btn">Buscar</button>
+        </div>
+        <div id="mod-search-results"></div>
+      </div>
+      ` : ""}
     </section>
   `;
 
@@ -736,6 +788,128 @@ async function moderationPage() {
     }
   } catch (err) {
     document.getElementById("reports-list").innerHTML = `<p class="muted">Error al cargar reportes: ${esc(err.message)}</p>`;
+  }
+
+  // --- Gestión de usuarios: Eliminar usuario ---
+  const userSearchInput = document.getElementById("user-search-input");
+  const userSearchBtn = document.getElementById("user-search-btn");
+  const userSearchResults = document.getElementById("user-search-results");
+
+  const runUserSearch = async () => {
+    const q = userSearchInput.value.trim();
+    if (!q) return;
+    userSearchResults.innerHTML = '<p class="muted">Buscando...</p>';
+    try {
+      const users = await searchUsersByUsername(q);
+      if (users.length === 0) {
+        userSearchResults.innerHTML = '<p class="empty">No se encontraron usuarios.</p>';
+        return;
+      }
+      userSearchResults.innerHTML = users.map(u => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0; border-bottom:1px solid var(--line);">
+          <span><strong>${esc(u.username)}</strong> (Rol: ${esc(u.role)})</span>
+          <button class="button btn-danger btn-delete-user-posts" data-id="${u.id}" data-username="${esc(u.username)}" style="padding:0.3rem 0.6rem; font-size:0.8rem;">Eliminar usuario y posts</button>
+        </div>
+      `).join("");
+    } catch (err) {
+      userSearchResults.innerHTML = `<p class="muted" style="color:var(--danger)">Error: ${esc(err.message)}</p>`;
+    }
+  };
+
+  if (userSearchBtn) {
+    userSearchBtn.onclick = runUserSearch;
+    userSearchInput.onkeydown = e => { if (e.key === "Enter") runUserSearch(); };
+  }
+
+  if (userSearchResults) {
+    userSearchResults.onclick = async e => {
+      if (e.target.classList.contains("btn-delete-user-posts")) {
+        const userId = e.target.getAttribute("data-id");
+        const username = e.target.getAttribute("data-username");
+        if (confirm(`¿Estás completamente seguro de eliminar al usuario "${username}"? Esto borrará su cuenta y todos sus temas y respuestas de forma permanente.`)) {
+          try {
+            e.target.disabled = true;
+            e.target.textContent = "Eliminando...";
+            await deleteUserAndPosts(userId);
+            flash(`Usuario ${username} y sus posts eliminados con éxito.`);
+            runUserSearch();
+          } catch (err) {
+            flash("Error al eliminar usuario: " + err.message);
+            e.target.disabled = false;
+            e.target.textContent = "Eliminar usuario y posts";
+          }
+        }
+      }
+    };
+  }
+
+  // --- Solo admin: Añadir/gestionar moderadores ---
+  if (isAdmin) {
+    const modSearchInput = document.getElementById("mod-search-input");
+    const modSearchBtn = document.getElementById("mod-search-btn");
+    const modSearchResults = document.getElementById("mod-search-results");
+
+    const runModSearch = async () => {
+      const q = modSearchInput.value.trim();
+      if (!q) return;
+      modSearchResults.innerHTML = '<p class="muted">Buscando...</p>';
+      try {
+        const users = await searchUsersByUsername(q);
+        if (users.length === 0) {
+          modSearchResults.innerHTML = '<p class="empty">No se encontraron usuarios.</p>';
+          return;
+        }
+        modSearchResults.innerHTML = users.map(u => {
+          const isMod = u.role === "moderator";
+          const isAdminRole = u.role === "admin";
+          let actionBtn = "";
+          if (isAdminRole) {
+            actionBtn = `<span class="muted" style="font-size:0.8rem;">Es administrador</span>`;
+          } else if (isMod) {
+            actionBtn = `<button class="button button-quiet btn-demote-mod" data-id="${u.id}" data-username="${esc(u.username)}" style="padding:0.3rem 0.6rem; font-size:0.8rem;">Quitar rol moderador</button>`;
+          } else {
+            actionBtn = `<button class="button btn-promote-mod" data-id="${u.id}" data-username="${esc(u.username)}" style="padding:0.3rem 0.6rem; font-size:0.8rem; background:var(--blue);">Hacer moderador</button>`;
+          }
+          return `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0; border-bottom:1px solid var(--line);">
+              <span><strong>${esc(u.username)}</strong> (Rol: ${esc(u.role)})</span>
+              ${actionBtn}
+            </div>
+          `;
+        }).join("");
+      } catch (err) {
+        modSearchResults.innerHTML = `<p class="muted" style="color:var(--danger)">Error: ${esc(err.message)}</p>`;
+      }
+    };
+
+    if (modSearchBtn) {
+      modSearchBtn.onclick = runModSearch;
+      modSearchInput.onkeydown = e => { if (e.key === "Enter") runModSearch(); };
+    }
+
+    if (modSearchResults) {
+      modSearchResults.onclick = async e => {
+        const isPromote = e.target.classList.contains("btn-promote-mod");
+        const isDemote = e.target.classList.contains("btn-demote-mod");
+        if (isPromote || isDemote) {
+          const userId = e.target.getAttribute("data-id");
+          const username = e.target.getAttribute("data-username");
+          const newRole = isPromote ? "moderator" : "member";
+          const actionText = isPromote ? "promover a moderador a" : "quitar el rol de moderador a";
+          if (confirm(`¿Querés ${actionText} "${username}"?`)) {
+            try {
+              e.target.disabled = true;
+              await setUserRole(userId, newRole);
+              flash(`Rol de ${username} actualizado con éxito.`);
+              runModSearch();
+            } catch (err) {
+              flash("Error al cambiar rol: " + err.message);
+              e.target.disabled = false;
+            }
+          }
+        }
+      };
+    }
   }
 }
 async function showApproveProposalModal(p) {
@@ -1477,6 +1651,7 @@ main.addEventListener("click", async e => {
   // Editar tema
   if (e.target.classList.contains("edit-topic-btn")) {
     const topicId = e.target.getAttribute("data-id");
+    const isStaffEdit = e.target.getAttribute("data-staff") === "1";
     const topicBody = main.querySelector(".topic-body");
     const rawText = topicBody.getAttribute("data-raw");
     const titleH1 = main.querySelector("h1");
@@ -1487,9 +1662,10 @@ main.addEventListener("click", async e => {
     titleH1.innerHTML = `<input type="text" class="input edit-topic-title" value="${esc(currentTitle)}" style="width:100%;">`;
     topicBody.innerHTML = `
       <div class="edit-form">
-        <textarea class="input edit-topic-text" style="width:100%; min-height:180px; margin-bottom:0.5rem; font-family:var(--sans);">${esc(rawText)}</textarea>
+        ${isStaffEdit ? `<div style="background:var(--gold-pale,#fff8e1); border-left:3px solid var(--gold); padding:0.5rem 0.8rem; margin-bottom:0.8rem; font-size:0.85rem; color:var(--navy);">🛡️ Estás editando este tema como <strong>moderador</strong>. Se registrará tu intervención.</div>` : ""}
+        <textarea class="input edit-topic-text" style="width:100%; min-height:180px; margin-bottom:0.5rem; font-family:var(--sans);" data-staff-edit="${isStaffEdit ? '1' : '0'}">${esc(rawText)}</textarea>
         <div style="display:flex; gap:0.5rem;">
-          <button class="button btn-save-topic" data-id="${topicId}">Guardar Cambios</button>
+          <button class="button btn-save-topic" data-id="${topicId}" data-staff="${isStaffEdit ? '1' : '0'}">Guardar Cambios</button>
           <button class="button button-quiet btn-cancel-topic">Cancelar</button>
         </div>
       </div>
@@ -1503,12 +1679,19 @@ main.addEventListener("click", async e => {
   
   if (e.target.classList.contains("btn-save-topic")) {
     const topicId = e.target.getAttribute("data-id");
+    const isStaffEdit = e.target.getAttribute("data-staff") === "1";
     const newTitle = main.querySelector(".edit-topic-title").value.trim();
     const newBody = main.querySelector(".edit-topic-text").value.trim();
     if (!newTitle || !newBody) return flash("El título y el cuerpo no pueden estar vacíos.");
     try {
-      await updateTopic(topicId, newTitle, newBody);
-      flash("Tema actualizado.");
+      if (isStaffEdit) {
+        const profile = await getCurrentUserProfile();
+        await updateTopicModerated(topicId, newTitle, newBody, profile?.username || "moderador");
+        flash("Tema actualizado por moderación.");
+      } else {
+        await updateTopic(topicId, newTitle, newBody);
+        flash("Tema actualizado.");
+      }
       const [route, id] = location.hash.slice(1).split("/");
       await topic(id);
     } catch (err) {

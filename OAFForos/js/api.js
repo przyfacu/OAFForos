@@ -32,23 +32,63 @@ export async function getTopic(id) {
   if (!supabase) return demo.topics.find(t => t.id === id);
   
   let data, error;
-  const res = await supabase.from("topics").select("*,profiles(username),topic_tags(tags(name)),attachments!topic_id(*),replies(*,profiles(username),attachments!reply_id(*))").eq("id", id).single();
-  data = res.data;
-  error = res.error;
-
-  if (error) {
-    if (error.code === "PGRST200" || error.code === "42P01" || error.message?.includes("attachments") || error.details?.includes("attachments")) {
-      console.warn("La tabla 'attachments' no existe o falla en la consulta. Reintentando sin adjuntos:", error);
-      const fallbackRes = await supabase.from("topics").select("*,profiles(username),topic_tags(tags(name)),replies(*,profiles(username))").eq("id", id).single();
-      if (fallbackRes.error) throw fallbackRes.error;
-      data = fallbackRes.data;
-      data.attachments = [];
-      if (data.replies) {
-        data.replies = data.replies.map(r => ({ ...r, attachments: [] }));
-      }
-      error = null;
+  // Intento 1: Todo (incluido moderated_by join y attachments)
+  try {
+    const res = await supabase
+      .from("topics")
+      .select("*,profiles(username),moderator:profiles!moderated_by(username),topic_tags(tags(name)),attachments!topic_id(*),replies(*,profiles(username),attachments!reply_id(*))")
+      .eq("id", id)
+      .single();
+    if (!res.error) {
+      data = res.data;
     } else {
-      throw error;
+      error = res.error;
+    }
+  } catch (err) {
+    error = err;
+  }
+
+  // Si falló, intentar sin el join de moderated_by (puede no existir la relación o columna aún)
+  if (error) {
+    console.warn("Intento 1 de getTopic falló, probando sin join de moderador:", error);
+    try {
+      const res = await supabase
+        .from("topics")
+        .select("*,profiles(username),topic_tags(tags(name)),attachments!topic_id(*),replies(*,profiles(username),attachments!reply_id(*))")
+        .eq("id", id)
+        .single();
+      if (!res.error) {
+        data = res.data;
+        error = null;
+      } else {
+        error = res.error;
+      }
+    } catch (err) {
+      error = err;
+    }
+  }
+
+  // Si sigue fallando (por ejemplo por attachments)
+  if (error) {
+    console.warn("Intento 2 de getTopic falló, probando sin attachments ni moderador:", error);
+    try {
+      const res = await supabase
+        .from("topics")
+        .select("*,profiles(username),topic_tags(tags(name)),replies(*,profiles(username))")
+        .eq("id", id)
+        .single();
+      if (!res.error) {
+        data = res.data;
+        data.attachments = [];
+        if (data.replies) {
+          data.replies = data.replies.map(r => ({ ...r, attachments: [] }));
+        }
+        error = null;
+      } else {
+        throw res.error;
+      }
+    } catch (err) {
+      throw err;
     }
   }
 
@@ -62,6 +102,9 @@ export async function getTopic(id) {
     body: data.body,
     isPinned: data.is_pinned || false,
     tags: data.topic_tags?.map(x => x.tags?.name).filter(Boolean) || [],
+    moderatedBy: data.moderated_by,
+    moderatedByUsername: data.moderator?.username,
+    moderated_at: data.moderated_at,
     attachments: (data.attachments || []).map(att => ({
       ...att,
       url: getPublicAttachmentUrl(att.path)
@@ -837,4 +880,99 @@ export function getPublicAttachmentUrl(path) {
   return data?.publicUrl || null;
 }
 
+/**
+ * Actualiza un tema y lo marca como editado por el staff de moderación.
+ */
+export async function updateTopicModerated(id, title, body, moderatorUsername) {
+  if (!supabase) {
+    const topic = demo.topics.find(t => t.id === id);
+    if (!topic) throw new Error("Tema no encontrado.");
+    topic.title = title;
+    topic.body = body;
+    topic.moderatedBy = moderatorUsername || "moderador";
+    topic.moderatedAt = new Date().toLocaleDateString("es-AR");
+    return topic;
+  }
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("No estás autenticado.");
+  const { data, error } = await supabase
+    .from("topics")
+    .update({ title, body, moderated_by: user.id, moderated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Busca usuarios por username (solo para staff).
+ */
+export async function searchUsersByUsername(query) {
+  if (!supabase) {
+    // Demo: devuelve usuarios de demo
+    return [
+      { id: "user-demo-1", username: "sofia_fernandez", email: "sofia@demo.com", role: "member", created_at: new Date().toISOString() },
+      { id: "user-demo-2", username: "lucas_r", email: "lucas@demo.com", role: "member", created_at: new Date().toISOString() }
+    ].filter(u => u.username.toLowerCase().includes(query.toLowerCase()));
+  }
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, username, role, created_at")
+    .ilike("username", `%${query}%`)
+    .order("username")
+    .limit(20);
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Elimina un usuario y todos sus posts (topics + replies).
+ * Requiere permisos de service_role o RLS apropiadas.
+ */
+export async function deleteUserAndPosts(userId) {
+  if (!supabase) {
+    // Demo: simular eliminación
+    demo.topics = demo.topics.filter(t => t.authorId !== userId);
+    demo.topics.forEach(t => {
+      if (t.responses) t.responses = t.responses.filter(r => r.authorId !== userId);
+    });
+    return;
+  }
+  // Eliminar replies del usuario
+  const { error: repliesError } = await supabase
+    .from("replies")
+    .delete()
+    .eq("author_id", userId);
+  if (repliesError) throw repliesError;
+
+  // Eliminar topics del usuario
+  const { error: topicsError } = await supabase
+    .from("topics")
+    .delete()
+    .eq("author_id", userId);
+  if (topicsError) throw topicsError;
+
+  // Eliminar perfil
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .delete()
+    .eq("id", userId);
+  if (profileError) throw profileError;
+}
+
+/**
+ * Cambia el rol de un usuario (solo admin puede hacer esto).
+ */
+export async function setUserRole(userId, newRole) {
+  if (!supabase) {
+    // Demo: no hace nada real
+    return;
+  }
+  const { error } = await supabase
+    .from("profiles")
+    .update({ role: newRole })
+    .eq("id", userId);
+  if (error) throw error;
+}
 

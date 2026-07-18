@@ -33,6 +33,8 @@ create table public.topics (
 --   body text not null check (char_length(body) between 20 and 20000),
   status public.content_status not null default 'published',
   search_vector tsvector generated always as (to_tsvector('spanish', coalesce(title,'') || ' ' || coalesce(body,''))) stored,
+  moderated_by uuid references public.profiles(id) on delete set null,
+  moderated_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
