@@ -212,7 +212,7 @@ async function forum(category){
       <div class="feed feed--pinned">${pinnedTopics.map(topicRow).join("")}</div>
     </div>` : "";
 
-  main.innerHTML=`<section class="page-head"><div class="eyebrow">Foro</div><h1>${esc(categoryName||"Preguntas que hacen avanzar")}</h1><p>${esc(categoryName?categoryDesc:"Un espacio para hacer preguntas, discutir soluciones y aprender con otros estudiantes y entrenadores.")}</p></section><section class="forum-layout"><div class="section-head"><span class="muted">${topics.length} temas</span><a class="button" href="#nuevo-tema">Crear tema</a></div>${!category?`<div class="category-list">${categories.map(c=>`<a class="category-card" href="#foro/${c.id}"><span class="category-icon">${getIcon(c.id)}</span><h2>${esc(c.title)}</h2><p>${esc(c.description)}</p></a>`).join("")}</div><h2 style="margin-top:3rem;font-family:var(--serif)">Actividad reciente</h2>`:""}
+  main.innerHTML=`<section class="page-head"><div class="eyebrow">Foro</div><h1>${esc(categoryName||"Preguntas y discusiones")}</h1><p>${esc(categoryName?categoryDesc:"Un espacio para hacer preguntas, discutir soluciones y aprender con otros estudiantes y entrenadores.")}</p></section><section class="forum-layout"><div class="section-head"><span class="muted">${topics.length} temas</span><a class="button" href="#nuevo-tema">Crear tema</a></div>${!category?`<div class="category-list">${categories.map(c=>`<a class="category-card" href="#foro/${c.id}"><span class="category-icon">${getIcon(c.id)}</span><h2>${esc(c.title)}</h2><p>${esc(c.description)}</p></a>`).join("")}</div><h2 style="margin-top:3rem;font-family:var(--serif)">Actividad reciente</h2>`:""}
   ${pinnedSection}
   <div class="feed">${regularTopics.length?regularTopics.map(topicRow).join(""):'<p class="empty">Todavía no hay temas en esta categoría.</p>'}</div></section>`;
 }
@@ -220,7 +220,7 @@ async function forum(category){
 async function archive(){
   let entries=await archiveRoots();
   let types=[...new Set(entries.map(x=>x.type))];
-  main.innerHTML=`<section class="page-head"><div class="eyebrow">Archivo de enunciados</div><h1>Problemas para volver a pensar.</h1><p>Un recorrido ordenado por competencias de física. Los aportes de la comunidad se publican después de una revisión.</p></section><section class="forum-layout"><div class="filter-bar"><select id="archive-type"><option value="">Todos los tipos</option>${types.map(x=>`<option>${esc(x)}</option>`).join("")}</select><a class="button button-quiet" href="#proponer">Proponer una entrada</a></div><div id="archive-results" class="archive-list">${archiveItems(entries)}</div></section>`;
+  main.innerHTML=`<section class="page-head"><div class="eyebrow">Archivo de enunciados</div><h1>Problemas</h1><p>Los aportes de la comunidad se publican después de una revisión.</p></section><section class="forum-layout"><div class="filter-bar"><select id="archive-type"><option value="">Todos los tipos</option>${types.map(x=>`<option>${esc(x)}</option>`).join("")}</select><a class="button button-quiet" href="#proponer">Proponer una entrada</a></div><div id="archive-results" class="archive-list">${archiveItems(entries)}</div></section>`;
   document.querySelector("#archive-type").onchange=e=>document.querySelector("#archive-results").innerHTML=archiveItems(entries.filter(x=>!e.target.value||x.type===e.target.value));
 }
 
@@ -542,21 +542,20 @@ async function newTopic(problemId){
 function about(){
   main.innerHTML=`<section class="page-head">
     <div class="eyebrow">Acerca de OAFForos</div>
-    <h1>Un archivo y una conversación.</h1>
-    <p>OAFForos es un proyecto comunitario para estudiantes, docentes, entrenadores y exolímpicos de física de la Olimpíada Argentina de Física.</p>
+    <h1>¡Bienvenido a OAFForos!</h1>
+    <p>OAFForos es un proyecto comunitario está principalmente orientado a estudiantes, docentes, entrenadores y exolímpicos de la Olimpíada Argentina de Física, aunque cualquier persona de cualquier nacionalidad puede utilizarlo.</p>
   </section>
   <section class="section two-column">
     <div>
       <h2>Pautas de Convivencia</h2>
-      <p>Tratamos las soluciones y discusiones académicas como conversaciones de aprendizaje:</p>
       <ul>
-        <li><strong>Respeto absoluto:</strong> Todos fuimos principiantes. Fomentamos preguntas honestas y respuestas constructivas.</li>
+        <li><strong>Respeto absoluto:</strong> Fomentamos preguntas honestas y respuestas constructivas. No será admitida ninguna forma de maltrato verbal mediante la plataforma.</li>
+        <li><strong>Reportar:</strong> Si encontrás alguna ofensa en algún tema o cadena, ¡No dudes en reportarlo! Reportar ayuda a que los moderadores puedan identificar faltas, y penalizar a los usuarios.</li>
         <li><strong>Políticas de Spoilers:</strong> Para no arruinar el desafío a otros estudiantes, ocultá las respuestas que revelen soluciones parciales o totales marcándolas como "spoiler" al responder.</li>
-        <li><strong>Edición comunitaria:</strong> No hay puntajes de reputación ni votos. La precisión de las respuestas se alcanza conversando y refinando las ideas colectivamente.</li>
       </ul>
       
       <h2>Contacto de Moderación</h2>
-      <p>Si encontrás algún comportamiento inapropiado que requiera atención del equipo, podés usar el botón de <em>Reportar</em> en cada publicación o escribir a <a href="mailto:moderacion@oafforos.com">moderacion@oafforos.com</a>.</p>
+      <p>Si encontrás algún comportamiento inapropiado que requiera atención del equipo, podés usar el botón de <em>Reportar</em> en cada publicación y se le informará a los moderadores.</p>
       
       <h2>Política de Privacidad Básica</h2>
       <p>OAFForos respeta tu privacidad:</p>
