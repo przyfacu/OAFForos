@@ -438,7 +438,7 @@ async function newTopic(problemId){
 
   document.querySelector("#topic-form").onsubmit=async e=>{
     e.preventDefault();
-    const submitBtn = e.target.querySelector(".button[type!='button']") || e.target.querySelector(".button");
+    const submitBtn = e.target.querySelector(".button:not([type='button'])") || e.target.querySelector(".button");
     try{
       submitBtn.disabled = true;
       submitBtn.textContent = "Publicando...";
