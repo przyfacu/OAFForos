@@ -181,7 +181,19 @@ const getIcon = id => icons[id] || "○";
 async function home(){
   const topics=await getTopics();
   const categories = await getCategories();
-  main.innerHTML=`<section class="hero"><div class="eyebrow">Comunidad argentina de física olímpica</div><h1>Pensar la física, entre pares.</h1><p>Un lugar para discutir problemas, compartir ideas y construir un archivo vivo de competencias de física.</p><a class="button" href="#foro">Explorar el foro</a></section><section class="section"><div class="section-head"><div><div class="eyebrow">Espacios de discusión</div><h2>Elegí una rama. Traé una pregunta.</h2></div><a class="text-link" href="#foro">Ver el foro →</a></div><div class="grid cards-3">${categories.slice(0,3).map(c=>`<a class="card" href="#foro/${c.id}"><span class="category-icon">${getIcon(c.id)}</span><h3>${esc(c.title)}</h3><p>${esc(c.description)}</p></a>`).join("")}</div></section><section class="section two-column"><div><div class="eyebrow">Conversaciones recientes</div><h2>Lo que se está pensando ahora</h2><div class="feed">${topics.slice(0,4).map(topicRow).join("")}</div></div><aside class="sidebar-box"><h3>El archivo de problemas</h3><p>Recorré competencias, ediciones y niveles. Cada problema abre una conversación para resolverlo en comunidad.</p><a class="text-link" href="#archivo">Ir al archivo →</a></aside></section>`;
+  main.innerHTML=`<section class="hero"><div class="eyebrow">Comunidad argentina de física olímpica</div><h1>Pensar la física, entre pares.</h1><p>Un lugar para discutir problemas, compartir ideas y construir un archivo vivo de competencias de física.</p><a class="button" href="#foro">Explorar el foro</a></section><section class="section"><div class="section-head"><div><div class="eyebrow">Espacios de discusión</div><h2>Elegí una rama. Traé una pregunta.</h2></div><a class="text-link" href="#foro">Ver el foro →</a></div><div class="grid cards-3">${categories.slice(0,3).map(c=>`<a class="card" href="#foro/${c.id}"><span class="category-icon">${getIcon(c.id)}</span><h3>${esc(c.title)}</h3><p>${esc(c.description)}</p></a>`).join("")}</div></section><section class="section two-column"><div><div class="eyebrow">Conversaciones recientes</div><h2>Lo que se está pensando ahora</h2><div class="feed">${topics.slice(0,4).map(topicRow).join("")}</div></div><aside class="sidebar-box"><h3>El archivo de problemas</h3><p>Recorré competencias, ediciones y niveles. Cada problema abre una conversación para resolverlo en comunidad.</p><a class="text-link" href="#archivo">Ir al archivo →</a></aside></section>
+  <section class="section" style="border-top:1px solid var(--line); padding-top:3rem;">
+    <div style="background:var(--pale); border:1px solid var(--line); padding:2rem; display:flex; align-items:center; justify-content:space-between; gap:2rem; flex-wrap:wrap;">
+      <div style="max-width:680px;">
+        <div class="eyebrow" style="color:var(--blue)">¿Encontraste un error?</div>
+        <h3 style="font-family:var(--serif); font-size:1.5rem; margin:0.4rem 0; color:var(--navy);">Ayudanos a mejorar OAFForos</h3>
+        <p style="color:var(--muted); margin:0; font-size:0.9rem;">Si ves algún error, bug, o tenés sugerencias para mejorar el sitio, podés reportarlo directamente a nuestro equipo de moderación.</p>
+      </div>
+      <div>
+        <button class="button" id="feedback-trigger-btn" style="background:var(--blue); white-space:nowrap; font-size:0.9rem;">Reportar error / Feedback</button>
+      </div>
+    </div>
+  </section>`;
 }
 
 async function forum(category){
@@ -698,6 +710,7 @@ async function moderationPage() {
           <div style="background:#fff; border:1px dashed var(--line); padding:0.5rem; font-size:0.85rem; margin:0.5rem 0; color:var(--muted)">
             ${r.topic ? `<strong>Tema:</strong> <a href="#tema/${r.topic.id}">${esc(r.topic.title)}</a>` : ''}
             ${r.reply ? `<strong>Respuesta:</strong> ${md(r.reply.body)}` : ''}
+            ${(!r.topic && !r.reply) ? `<span style="color:var(--blue); font-weight:600;">Reporte general / Feedback</span>` : ''}
           </div>
           <button class="button button-quiet btn-resolve-report" data-id="${r.id}" style="padding:0.3rem 0.6rem; font-size:0.75rem;">Resolver</button>
         </div>
@@ -983,7 +996,7 @@ async function updateAuth(){
   let username = "Ingresar";
   
   const nav = document.querySelector("nav");
-  if (u) {
+  if (u || !configured) {
     try {
       const profile = await getCurrentUserProfile();
       if (profile) {
@@ -992,7 +1005,7 @@ async function updateAuth(){
           location.hash = "#establecer-username";
         }
       } else {
-        username = u.user_metadata?.username || u.email;
+        username = u?.user_metadata?.username || u?.email || "miembro_demo";
       }
       
       let modLink = document.querySelector("#nav-moderacion");
@@ -1010,7 +1023,7 @@ async function updateAuth(){
       }
     } catch (err) {
       console.error("Error fetching profile for auth update:", err);
-      username = u.user_metadata?.username || u.email;
+      username = u?.user_metadata?.username || u?.email || "miembro_demo";
     }
   } else {
     let modLink = document.querySelector("#nav-moderacion");
@@ -1550,6 +1563,73 @@ main.addEventListener("click", async e => {
         flash(err.message);
       }
     };
+  }
+
+  // Botón de feedback en la página de inicio
+  if (e.target.id === "feedback-trigger-btn") {
+    const profile = await getCurrentUserProfile();
+    
+    modal.style.width = "";
+    if (!profile) {
+      modal.innerHTML = `
+        <div class="modal-content">
+          <button class="icon-button" style="float:right" onclick="this.closest('dialog').close()">×</button>
+          <h2>Reportar un error</h2>
+          <p class="muted" style="margin-bottom:1.5rem;">Para enviar feedback o reportar errores en la plataforma, debés ingresar con tu cuenta.</p>
+          <button class="button" onclick="this.closest('dialog').close(); location.hash='#ingresar';">Iniciar sesión</button>
+        </div>
+      `;
+    } else {
+      modal.innerHTML = `
+        <div class="modal-content">
+          <button class="icon-button" style="float:right" onclick="this.closest('dialog').close()">×</button>
+          <h2>Reportar un error / Feedback</h2>
+          <p class="muted" style="margin-bottom:1rem;">Contanos qué error encontraste o qué sugerencia tenés para mejorar la plataforma.</p>
+          <form id="feedback-form">
+            <div class="form-row">
+              <label for="feedback-type">Tipo de reporte</label>
+              <select id="feedback-type" class="input" required>
+                <option value="Error técnico / Bug">Error técnico / Bug</option>
+                <option value="Sugerencia de diseño">Sugerencia de diseño</option>
+                <option value="Error de contenido / Enunciado">Error de contenido / Enunciado</option>
+                <option value="Otro">Otro</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="feedback-reason">Descripción del error o sugerencia</label>
+              <textarea id="feedback-reason" class="input" style="min-height:120px;" placeholder="Sé lo más descriptivo posible..." maxlength="1000" required></textarea>
+            </div>
+            <button class="button" style="background:var(--blue); width:100%; margin-top:0.5rem;">Enviar feedback</button>
+          </form>
+        </div>
+      `;
+      modal.showModal();
+      
+      modal.querySelector("#feedback-form").onsubmit = async ev => {
+        ev.preventDefault();
+        const type = modal.querySelector("#feedback-type").value;
+        const reason = modal.querySelector("#feedback-reason").value.trim();
+        if (reason.length < 3) {
+          return flash("La descripción debe tener al menos 3 caracteres.");
+        }
+        const submitBtn = modal.querySelector(".button");
+        try {
+          if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Enviando..."; }
+          await createReport({
+            reason: `[${type}] ${reason}`,
+            topic_id: null,
+            reply_id: null
+          });
+          modal.close();
+          flash("¡Gracias por tu reporte! Los moderadores lo revisarán pronto.");
+        } catch (err) {
+          flash(err.message);
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Enviar feedback"; }
+        }
+      };
+      return;
+    }
+    modal.showModal();
   }
 
   // Aprobación de propuesta

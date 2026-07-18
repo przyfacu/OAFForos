@@ -242,7 +242,44 @@ export async function deleteReply(id) {
 
 export async function createReport(payload) {
   if (!supabase) {
-    console.log("Reporte simulado:", payload);
+    const reports = JSON.parse(localStorage.getItem("oaf_demo_reports") || "null");
+    const defaultReports = [
+      {
+        id: "rep-demo-1",
+        reason: "[Error técnico / Bug] El botón de subir imágenes a veces no responde en Firefox.",
+        created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
+        reporter_id: "user-1",
+        profiles: { username: "sofia_fernandez" },
+        topic_id: null,
+        reply_id: null,
+        resolved_at: null
+      },
+      {
+        id: "rep-demo-2",
+        reason: "Spam o contenido inapropiado",
+        created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+        reporter_id: "user-2",
+        profiles: { username: "lucas_r" },
+        topic_id: "bloque-plano-inclinado",
+        topic: { id: "bloque-plano-inclinado", title: "¿Cómo encarar este bloque sobre un plano inclinado?" },
+        reply_id: null,
+        resolved_at: null
+      }
+    ];
+    const currentReports = reports || defaultReports;
+    const newReport = {
+      id: "report-" + Math.random().toString(36).substr(2, 9),
+      reason: payload.reason,
+      created_at: new Date().toISOString(),
+      reporter_id: "demo-user",
+      profiles: { username: "miembro_demo" },
+      topic_id: payload.topic_id || null,
+      reply_id: payload.reply_id || null,
+      resolved_at: null
+    };
+    currentReports.push(newReport);
+    localStorage.setItem("oaf_demo_reports", JSON.stringify(currentReports));
+    console.log("Reporte simulado creado:", newReport);
     return;
   }
   const { data: { user } } = await supabase.auth.getUser();
@@ -556,7 +593,65 @@ export async function updateProposalStatus(id, status, note = "") {
 }
 
 export async function getReports() {
-  if (!supabase) return [];
+  if (!supabase) {
+    let reports = JSON.parse(localStorage.getItem("oaf_demo_reports"));
+    if (!reports) {
+      reports = [
+        {
+          id: "rep-demo-1",
+          reason: "[Error técnico / Bug] El botón de subir imágenes a veces no responde en Firefox.",
+          created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
+          reporter_id: "user-1",
+          profiles: { username: "sofia_fernandez" },
+          topic_id: null,
+          reply_id: null,
+          resolved_at: null
+        },
+        {
+          id: "rep-demo-2",
+          reason: "Spam o contenido inapropiado",
+          created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+          reporter_id: "user-2",
+          profiles: { username: "lucas_r" },
+          topic_id: "bloque-plano-inclinado",
+          topic: { id: "bloque-plano-inclinado", title: "¿Cómo encarar este bloque sobre un plano inclinado?" },
+          reply_id: null,
+          resolved_at: null
+        }
+      ];
+      localStorage.setItem("oaf_demo_reports", JSON.stringify(reports));
+    }
+    const activeReports = reports.filter(r => !r.resolved_at);
+    return activeReports.map(r => {
+      let topicObj = null;
+      if (r.topic_id) {
+        const foundTopic = demo.topics.find(t => t.id === r.topic_id);
+        if (foundTopic) {
+          topicObj = { id: foundTopic.id, title: foundTopic.title };
+        } else if (r.topic) {
+          topicObj = r.topic;
+        }
+      }
+      let replyObj = null;
+      if (r.reply_id) {
+        for (const t of demo.topics) {
+          const foundReply = t.responses?.find(rep => rep.id === r.reply_id);
+          if (foundReply) {
+            replyObj = { id: foundReply.id, body: foundReply.body };
+            break;
+          }
+        }
+      }
+      return {
+        id: r.id,
+        reason: r.reason,
+        created: new Date(r.created_at).toLocaleDateString("es-AR"),
+        reporter: r.profiles?.username || "miembro",
+        topic: topicObj,
+        reply: replyObj
+      };
+    });
+  }
   const { data, error } = await supabase.from("reports")
     .select("*,profiles!reporter_id(username),topics(id,title),replies(id,body)")
     .is("resolved_at", null)
@@ -573,7 +668,16 @@ export async function getReports() {
 }
 
 export async function resolveReport(id) {
-  if (!supabase) return;
+  if (!supabase) {
+    const reports = JSON.parse(localStorage.getItem("oaf_demo_reports") || "[]");
+    const index = reports.findIndex(r => r.id === id);
+    if (index !== -1) {
+      reports[index].resolved_at = new Date().toISOString();
+      reports[index].resolved_by = "demo-moderator";
+      localStorage.setItem("oaf_demo_reports", JSON.stringify(reports));
+    }
+    return;
+  }
   const { data: { user } } = await supabase.auth.getUser();
   const { error } = await supabase.from("reports")
     .update({ resolved_at: new Date().toISOString(), resolved_by: user.id })
