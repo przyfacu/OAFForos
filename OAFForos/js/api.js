@@ -29,8 +29,28 @@ export async function getTopics(category) {
 
 export async function getTopic(id) {
   if (!supabase) return demo.topics.find(t => t.id === id);
-  const { data, error } = await supabase.from("topics").select("*,profiles(username),topic_tags(tags(name)),attachments!topic_id(*),replies(*,profiles(username),attachments!reply_id(*))").eq("id", id).single();
-  if (error) throw error;
+  
+  let data, error;
+  const res = await supabase.from("topics").select("*,profiles(username),topic_tags(tags(name)),attachments!topic_id(*),replies(*,profiles(username),attachments!reply_id(*))").eq("id", id).single();
+  data = res.data;
+  error = res.error;
+
+  if (error) {
+    if (error.code === "PGRST200" || error.code === "42P01" || error.message?.includes("attachments") || error.details?.includes("attachments")) {
+      console.warn("La tabla 'attachments' no existe o falla en la consulta. Reintentando sin adjuntos:", error);
+      const fallbackRes = await supabase.from("topics").select("*,profiles(username),topic_tags(tags(name)),replies(*,profiles(username))").eq("id", id).single();
+      if (fallbackRes.error) throw fallbackRes.error;
+      data = fallbackRes.data;
+      data.attachments = [];
+      if (data.replies) {
+        data.replies = data.replies.map(r => ({ ...r, attachments: [] }));
+      }
+      error = null;
+    } else {
+      throw error;
+    }
+  }
+
   return {
     id: data.id,
     title: data.title,
@@ -228,8 +248,24 @@ export async function archiveChildren(id) {
 
 export async function getProblem(id) {
   if (!supabase) return demo.problems.find(x=>x.id===id);
-  const {data,error}=await supabase.from("problems").select("*,topics!problem_id(id),attachments!problem_id(*)").eq("id",id).single();
-  if(error) throw error;
+  let data, error;
+  const res = await supabase.from("problems").select("*,topics!problem_id(id),attachments!problem_id(*)").eq("id",id).single();
+  data = res.data;
+  error = res.error;
+  
+  if (error) {
+    if (error.code === "PGRST200" || error.code === "42P01" || error.message?.includes("attachments") || error.details?.includes("attachments")) {
+      console.warn("La tabla 'attachments' no existe o falla en la consulta. Reintentando sin adjuntos:", error);
+      const fallbackRes = await supabase.from("problems").select("*,topics!problem_id(id)").eq("id",id).single();
+      if (fallbackRes.error) throw fallbackRes.error;
+      data = fallbackRes.data;
+      data.attachments = [];
+      error = null;
+    } else {
+      throw error;
+    }
+  }
+
   return {
     id:data.id,
     number:data.number,
@@ -242,6 +278,28 @@ export async function getProblem(id) {
       url: getPublicAttachmentUrl(att.path)
     }))
   };
+}
+
+export async function updateProblem(id, data) {
+  if (!supabase) {
+    const p = demo.problems.find(x => x.id === id);
+    if (!p) throw new Error("Problema no encontrado.");
+    p.number = parseInt(data.number);
+    p.title = data.title;
+    p.statement = data.statement;
+    p.source = data.source_url || "Archivo OAFForos";
+    return p;
+  }
+  
+  const { data: updated, error } = await supabase.from("problems").update({
+    number: parseInt(data.number),
+    title: data.title,
+    statement: data.statement,
+    source_url: data.source_url || null
+  }).eq("id", id).select("*").single();
+  
+  if (error) throw error;
+  return updated;
 }
 
 export async function getCompetitionTypes() {

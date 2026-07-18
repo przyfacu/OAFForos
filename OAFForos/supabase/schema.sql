@@ -175,11 +175,11 @@ CREATE TABLE IF NOT EXISTS public.attachments (
   type text NOT NULL,
   size integer NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
---   CONSTRAINT attachments_context_check CHECK (
---     (topic_id IS NOT NULL)::int +
---     (reply_id IS NOT NULL)::int +
---     (problem_id IS NOT NULL)::int = 1
---   )
+  CONSTRAINT attachments_context_check CHECK (
+    (topic_id IS NOT NULL)::int +
+    (reply_id IS NOT NULL)::int +
+    (problem_id IS NOT NULL)::int = 1
+  )
 );
 
 -- Habilitar RLS en public.attachments

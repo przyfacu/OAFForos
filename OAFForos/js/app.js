@@ -1,6 +1,6 @@
 import { demo } from "./demo-data.js";
 import { configured, supabase, currentUser } from "./supabase.js";
-import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, createReply, updateReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword, uploadAttachments } from "./api.js";
+import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, createReply, updateReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword, uploadAttachments, updateProblem } from "./api.js";
 
 const main = document.querySelector("main"), modal = document.querySelector("#modal"), notice = document.querySelector("#notice");
 let activeProposals = [];
@@ -212,6 +212,8 @@ async function problem(id){
   let p=await getProblem(id);
   if(!p)return archive();
   const user = await currentUser();
+  const profile = await getCurrentUserProfile();
+  
   let discussionHTML = "";
   if(p.topicId){
     discussionHTML = `<a class="button" href="#tema/${p.topicId}">Abrir discusión y soluciones</a>`;
@@ -222,7 +224,87 @@ async function problem(id){
       discussionHTML = `<p class="muted">Este problema todavía no tiene una discusión asociada. <button class="button button-quiet" id="reply-auth-btn" style="margin-top:0.5rem; display:block;">Ingresá para iniciar la discusión</button></p>`;
     }
   }
-  main.innerHTML=`<article class="topic"><div class="eyebrow">${esc(p.source)}</div><h1>Problema ${p.number}: ${esc(p.title)}</h1><div class="topic-body">${md(p.statement)}</div>${renderAttachments(p.attachments || [])}${discussionHTML}<p class="muted" style="margin-top:2rem;">Las soluciones pueden contener spoilers y se muestran ocultas por defecto.</p></article>`;
+
+  let editBtnHTML = "";
+  if (profile && (profile.role === "moderator" || profile.role === "admin")) {
+    editBtnHTML = `
+      <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
+        <button class="button button-quiet" id="edit-problem-btn" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">✏️ Editar problema</button>
+      </div>
+    `;
+  }
+
+  main.innerHTML=`<article class="topic">
+    <div class="eyebrow">${esc(p.source)}</div>
+    <h1>Problema ${p.number}: ${esc(p.title)}</h1>
+    ${editBtnHTML}
+    <div class="topic-body">${md(p.statement)}</div>
+    ${renderAttachments(p.attachments || [])}
+    ${discussionHTML}
+    <p class="muted" style="margin-top:2rem;">Las soluciones pueden contener spoilers y se muestran ocultas por defecto.</p>
+  </article>`;
+
+  if (document.getElementById("edit-problem-btn")) {
+    document.getElementById("edit-problem-btn").onclick = () => showEditProblemModal(p);
+  }
+}
+
+async function showEditProblemModal(p) {
+  modal.style.width = "min(650px, calc(100% - 2rem))";
+  modal.innerHTML = `
+    <div class="modal-content" style="width: 100%;">
+      <button class="icon-button" style="float:right" id="modal-close-btn">×</button>
+      <h2 style="font-family:var(--serif); margin-bottom: 0.5rem;">Editar Problema</h2>
+      <p class="muted" style="margin-bottom: 1.5rem;">Modificá los datos del problema oficial.</p>
+      
+      <form id="edit-problem-form">
+        <div style="display:grid; grid-template-columns: 80px 1fr; gap:0.5rem;">
+          <div>
+            <label for="edit-prob-number" style="font-size:0.8rem; font-weight:600;">Número</label>
+            <input class="input" type="number" id="edit-prob-number" min="1" required value="${p.number}">
+          </div>
+          <div>
+            <label for="edit-prob-title" style="font-size:0.8rem; font-weight:600;">Título</label>
+            <input class="input" id="edit-prob-title" required value="${esc(p.title)}">
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:0.8rem;">
+          <label for="edit-prob-statement">Enunciado (Markdown + LaTeX)</label>
+          <textarea id="edit-prob-statement" required style="min-height:150px; font-family:var(--sans); width: 100%;">${esc(p.statement)}</textarea>
+        </div>
+
+        <div class="form-row">
+          <label for="edit-prob-source">Enlace a la fuente (URL)</label>
+          <input class="input" type="url" id="edit-prob-source" value="${esc(p.source.startsWith('http') ? p.source : '')}" placeholder="https://...">
+        </div>
+
+        <button class="button" style="margin-top:1rem; width:100%;">Guardar cambios</button>
+      </form>
+    </div>
+  `;
+  
+  document.getElementById("modal-close-btn").onclick = () => modal.close();
+  modal.showModal();
+
+  document.getElementById("edit-problem-form").onsubmit = async ev => {
+    ev.preventDefault();
+    const payload = {
+      number: document.getElementById("edit-prob-number").value,
+      title: document.getElementById("edit-prob-title").value.trim(),
+      statement: document.getElementById("edit-prob-statement").value.trim(),
+      source_url: document.getElementById("edit-prob-source").value.trim()
+    };
+
+    try {
+      await updateProblem(p.id, payload);
+      modal.close();
+      flash("Problema actualizado con éxito.");
+      await problem(p.id); // Recargar la página del problema para ver los cambios
+    } catch (err) {
+      alert("Error al actualizar el problema: " + err.message);
+    }
+  };
 }
 
 async function topic(id){
