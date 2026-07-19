@@ -266,12 +266,55 @@ async function problem(id){
     ${renderAttachments(p.attachments || [])}
     ${discussionHTML}
     <p class="muted" style="margin-top:2rem;">Las soluciones pueden contener spoilers y se muestran ocultas por defecto.</p>
-  </article>`;
+    </article>`;
+    
+    if (document.getElementById("edit-problem-btn")) {
+      document.getElementById("edit-problem-btn").onclick = () => showEditProblemModal(p);
+    }
 
-  if (document.getElementById("edit-problem-btn")) {
-    document.getElementById("edit-problem-btn").onclick = () => showEditProblemModal(p);
-  }
-}
+    // Direct reply form for logged‑in users
+    if (user) {
+      const replyFormHTML = `
+        <section class="reply-form-section" style="border-top:1px solid var(--line); padding-top:2rem; margin-top:2rem;">
+          <h3 style="font-family:var(--serif)">Responder al problema</h3>
+          <form id="reply-problem-form">
+            <div class="form-row">
+              <textarea id="reply-body-problem" class="input" placeholder="Escribí tu respuesta aquí..." required style="min-height:100px;"></textarea>
+            </div>
+            <div class="form-row" style="display: flex; align-items: center; gap: 0.5rem; margin: 1rem 0;">
+              <input type="checkbox" id="reply-spoiler-problem">
+              <label for="reply-spoiler-problem" style="font-size:0.9rem; font-weight:normal; cursor:pointer;">Marcar como spoiler (ocultar por defecto)</label>
+            </div>
+            <button class="button" style="margin-top:0.8rem;">Enviar respuesta</button>
+          </form>
+        </section>
+      `;
+      const container = document.createElement('div');
+      container.innerHTML = replyFormHTML;
+      main.appendChild(container);
+      document.getElementById('reply-problem-form').onsubmit = async e => {
+        e.preventDefault();
+        const body = document.getElementById('reply-body-problem').value.trim();
+        const isSpoiler = document.getElementById('reply-spoiler-problem').checked;
+        let topicId = p.topicId;
+        if (!topicId) {
+          const categories = await getCategories();
+          const catId = categories.length ? categories[0].id : null;
+          const newTopic = await createTopic({
+            category_id: catId,
+            title: `Discusión: Problema ${p.number} - ${p.title}`,
+            body: '',
+            tags: [],
+            problem_id: p.id
+          });
+          topicId = newTopic.id;
+          p.topicId = topicId;
+        }
+        await createReply(topicId, body, isSpoiler);
+        flash('Respuesta enviada con éxito.');
+        await problem(p.id);
+      };
+    }
 
 async function showEditProblemModal(p) {
   modal.style.width = "min(650px, calc(100% - 2rem))";
