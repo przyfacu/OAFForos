@@ -42,6 +42,40 @@ const md = text => {
   return safe;
 };
 
+/**
+ * Renderiza el texto e intercala imágenes adjuntas referenciadas con
+ * [nombre-del-archivo, epígrafe]. Si no hay una imagen adjunta con ese nombre,
+ * el marcador se trata como texto normal y queda visible tal como fue escrito.
+ */
+function renderBodyWithInlineImages(text, attachments = []) {
+  const source = String(text ?? "");
+  const marker = /\[([^,\]\r\n]+),\s*([^\]\r\n]*)\]/g;
+  let result = "";
+  let lastIndex = 0;
+  let match;
+
+  while ((match = marker.exec(source))) {
+    const filename = match[1].trim();
+    const attachment = attachments.find(file =>
+      isImage(file.type, file.name) && file.name === filename
+    );
+
+    if (!attachment) continue;
+
+    result += md(source.slice(lastIndex, match.index));
+    const caption = match[2].trim();
+    result += `<figure class="inline-image">
+      <a href="${esc(attachment.url)}" target="_blank" rel="noopener noreferrer" class="inline-image-link" title="Ver imagen completa">
+        <img src="${esc(attachment.url)}" alt="${esc(caption || attachment.name)}" loading="lazy">
+      </a>
+      ${caption ? `<figcaption>${esc(caption)}</figcaption>` : ""}
+    </figure>`;
+    lastIndex = marker.lastIndex;
+  }
+
+  return result ? result + md(source.slice(lastIndex)) : md(source);
+}
+
 function flash(message){ notice.textContent=message;notice.classList.add("show");setTimeout(()=>notice.classList.remove("show"),3200); }
 function nav(){document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("active",location.hash.startsWith(a.getAttribute("href"))))}
 
@@ -256,7 +290,7 @@ async function problem(id){
         }
         return `<section class="reply" id="reply-${r.id}">
           <div class="reply-head"><b>${esc(r.author)}</b><span>${esc(r.created)} ${replyActions}</span></div>
-          ${r.isSpoiler ? `<details class="spoiler"><summary>Mostrar spoiler</summary><div class="reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div>${renderAttachments(r.attachments || [])}</details>` : `<div class="reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div>${renderAttachments(r.attachments || [])}`}
+          ${r.isSpoiler ? `<details class="spoiler"><summary>Mostrar spoiler</summary><div class="reply-body" data-raw="${esc(r.body)}">${renderBodyWithInlineImages(r.body, r.attachments)}</div>${renderAttachments(r.attachments || [])}</details>` : `<div class="reply-body" data-raw="${esc(r.body)}">${renderBodyWithInlineImages(r.body, r.attachments)}</div>${renderAttachments(r.attachments || [])}`}
         </section>`;
       }).join("")
     : `<p class="empty problem-replies-empty">Todavía no hay respuestas. Sé la primera persona en aportar una idea.</p>`;
@@ -274,7 +308,7 @@ async function problem(id){
     <div class="eyebrow">${esc(p.source)}</div>
     <h1>Problema ${p.number}: ${esc(p.title)}</h1>
     ${editBtnHTML}
-    <div class="topic-body">${md(p.statement)}</div>
+    <div class="topic-body">${renderBodyWithInlineImages(p.statement, p.attachments)}</div>
     ${renderAttachments(p.attachments || [])}
     <section class="problem-replies">
       <div class="problem-replies-head">
@@ -296,6 +330,8 @@ async function problem(id){
             <input type="checkbox" id="reply-spoiler-problem">
             <label for="reply-spoiler-problem">Marcar como spoiler (ocultar por defecto)</label>
           </div>
+          ${buildAttachmentUploaderHTML("reply-problem-files")}
+          <p class="attachment-inline-help">Para insertar una imagen en el texto, escribí <code>[nombre-del-archivo, epígrafe]</code>.</p>
           <button class="button">Enviar respuesta</button>
         </form>
       </section>` : `
@@ -311,6 +347,7 @@ async function problem(id){
 
     // Si aún no existe el tema interno, se crea al enviar la respuesta directa.
     if (user) {
+      const problemReplyUploader = initAttachmentUploader("reply-problem-files");
       document.getElementById('reply-problem-form').onsubmit = async e => {
         e.preventDefault();
         const body = document.getElementById('reply-body-problem').value.trim();
@@ -329,7 +366,20 @@ async function problem(id){
           topicId = newTopic.id;
           p.topicId = topicId;
         }
-        await createReply(topicId, body, isSpoiler);
+        const reply = await createReply(topicId, body, isSpoiler);
+        const files = problemReplyUploader.getFiles();
+        if (files.length > 0) {
+          try {
+            const uploaded = await uploadAttachments(files, "reply", reply.id);
+            if (!supabase) {
+              const topicObj = demo.topics.find(t => t.id === topicId);
+              const replyObj = topicObj?.responses?.find(r => r.id === reply.id);
+              if (replyObj) replyObj.attachments = uploaded;
+            }
+          } catch (uploadErr) {
+            flash("Respuesta publicada, pero error al subir imágenes: " + uploadErr.message);
+          }
+        }
         flash('Respuesta enviada con éxito.');
         await problem(p.id);
       };
@@ -452,7 +502,7 @@ async function topic(id){
           <b>${esc(r.author)}</b>
           <span>${esc(r.created)} ${replyActions}</span>
         </div>
-        ${r.isSpoiler?`<details class="spoiler"><summary>Mostrar spoiler</summary><div class="reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div>${attachmentsHTML}</details>`:`<div class="reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div>${attachmentsHTML}`}
+        ${r.isSpoiler?`<details class="spoiler"><summary>Mostrar spoiler</summary><div class="reply-body" data-raw="${esc(r.body)}">${renderBodyWithInlineImages(r.body, r.attachments)}</div>${attachmentsHTML}</details>`:`<div class="reply-body" data-raw="${esc(r.body)}">${renderBodyWithInlineImages(r.body, r.attachments)}</div>${attachmentsHTML}`}
       </section>`;
     }).join("");
   } else {
@@ -473,6 +523,7 @@ async function topic(id){
             <label for="reply-spoiler" style="font-size:0.9rem; font-weight:normal; cursor:pointer;">Marcar como spoiler (ocultar por defecto)</label>
           </div>
           ${buildAttachmentUploaderHTML("reply-files")}
+          <p class="attachment-inline-help">Para insertar una imagen en el texto, escribí <code>[nombre-del-archivo, epígrafe]</code>.</p>
           <button class="button" style="margin-top:0.8rem;">Enviar respuesta</button>
         </form>
       </section>
@@ -490,7 +541,7 @@ async function topic(id){
     <h1>${esc(t.title)}</h1>
     <p class="topic-meta">${esc(t.author)} · ${esc(t.created)} ${topicActions}</p>
     ${moderationBadge}
-    <div class="topic-body" data-raw="${esc(t.body)}">${md(t.body)}</div>
+    <div class="topic-body" data-raw="${esc(t.body)}">${renderBodyWithInlineImages(t.body, t.attachments)}</div>
     ${renderAttachments(t.attachments || [])}
     <div style="margin-top:1rem; margin-bottom: 2rem;">
       ${(t.tags||[]).map(x=>`<i class="tag">${esc(x)}</i>`).join("")}
@@ -547,6 +598,7 @@ async function newTopic(problemId){
         <textarea id="body" required></textarea>
       </div>
       ${buildAttachmentUploaderHTML("topic-files")}
+      <p class="attachment-inline-help">Para insertar una imagen en el texto, escribí <code>[nombre-del-archivo, epígrafe]</code>.</p>
       <button class="button" style="margin-top:0.8rem;">Publicar tema</button>
     </form>
   </section>`;

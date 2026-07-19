@@ -222,6 +222,35 @@
 .attachment-download-btn:hover {
   background: #d5e7eb;
 }
+.attachment-inline-help {
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.inline-image {
+  display: table;
+  max-width: 100%;
+  margin: 1.25rem auto;
+}
+.inline-image-link {
+  display: block;
+}
+.inline-image img {
+  display: block;
+  max-width: min(100%, 760px);
+  max-height: 620px;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.inline-image figcaption {
+  margin-top: 0.45rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-style: italic;
+  text-align: center;
+}
 
 /* ── Temas fijados ─────────────────────────────────────── */
 .pinned-section {
