@@ -153,6 +153,7 @@ create policy "staff manage topic tags" on public.topic_tags for all using (publ
 create policy "read published replies" on public.replies for select using (status='published' or author_id=auth.uid() or public.is_staff());
 create policy "members create replies" on public.replies for insert with check (auth.uid()=author_id and status='published' and exists(select 1 from public.topics t where t.id=topic_id and t.status='published'));
 create policy "authors update replies" on public.replies for update using (auth.uid()=author_id and status='published') with check (auth.uid()=author_id and status='published');
+create policy "authors delete replies" on public.replies for delete using (auth.uid()=author_id and status='published');
 create policy "staff manage replies" on public.replies for all using (public.is_staff()) with check (public.is_staff());
 create policy "public read archive types" on public.competition_types for select using (true); create policy "public read competitions" on public.competitions for select using (true); create policy "public read editions" on public.editions for select using (true); create policy "public read levels" on public.levels for select using (true); create policy "public read published problems" on public.problems for select using (status='published' or public.is_staff());
 create policy "staff manage archive types" on public.competition_types for all using (public.is_staff()) with check (public.is_staff()); create policy "staff manage competitions" on public.competitions for all using (public.is_staff()) with check (public.is_staff()); create policy "staff manage editions" on public.editions for all using (public.is_staff()) with check (public.is_staff()); create policy "staff manage levels" on public.levels for all using (public.is_staff()) with check (public.is_staff()); create policy "staff manage problems" on public.problems for all using (public.is_staff()) with check (public.is_staff());
@@ -195,4 +196,3 @@ CREATE POLICY "attachments_db_authenticated_insert" ON public.attachments FOR IN
 
 -- Política de la base de datos: Borrado para usuarios autenticados
 CREATE POLICY "attachments_db_authenticated_delete" ON public.attachments FOR DELETE USING (auth.role() = 'authenticated');
-

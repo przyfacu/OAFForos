@@ -293,8 +293,11 @@ export async function deleteReply(id) {
     }
     throw new Error("Respuesta no encontrada.");
   }
-  const { error } = await supabase.from("replies").delete().eq("id", id);
+  // Con RLS, un DELETE sin filas afectadas no devuelve necesariamente un error.
+  // Pedimos la fila eliminada para detectar permisos insuficientes o IDs inexistentes.
+  const { data, error } = await supabase.from("replies").delete().eq("id", id).select("id");
   if (error) throw error;
+  if (!data?.length) throw new Error("No tenés permiso para borrar esta respuesta o ya no existe.");
 }
 
 export async function createReport(payload) {
@@ -975,4 +978,3 @@ export async function setUserRole(userId, newRole) {
     .eq("id", userId);
   if (error) throw error;
 }
-

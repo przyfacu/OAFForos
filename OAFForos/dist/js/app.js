@@ -240,12 +240,23 @@ async function problem(id){
   // Las respuestas se almacenan en el tema interno asociado al problema.
   const discussion = p.topicId ? await getTopic(p.topicId) : null;
   const responses = discussion?.responses || [];
+  const isStaff = profile && (profile.role === "moderator" || profile.role === "admin");
   const responsesHTML = responses.length
     ? responses.map(r => {
-        const bodyHTML = `<div class="reply-body">${md(r.body)}</div>${renderAttachments(r.attachments || [])}`;
+        let replyActions = "";
+        if (user) {
+          if (user.id === r.authorId) {
+            replyActions += `<button class="action-btn edit-reply-btn" data-id="${r.id}">Editar</button> `;
+            replyActions += `<button class="action-btn delete-reply-btn" data-id="${r.id}" style="color:var(--danger)">Borrar</button> `;
+          } else if (isStaff) {
+            replyActions += `<button class="action-btn edit-reply-btn" data-id="${r.id}" style="color:var(--blue)">✏️ Editar (mod)</button> `;
+            replyActions += `<button class="action-btn delete-reply-btn" data-id="${r.id}" style="color:var(--danger)">🗑️ Borrar (mod)</button> `;
+          }
+          replyActions += `<button class="action-btn report-btn" data-reply-id="${r.id}">Reportar</button>`;
+        }
         return `<section class="reply" id="reply-${r.id}">
-          <div class="reply-head"><b>${esc(r.author)}</b><span>${esc(r.created)}</span></div>
-          ${r.isSpoiler ? `<details class="spoiler"><summary>Mostrar spoiler</summary>${bodyHTML}</details>` : bodyHTML}
+          <div class="reply-head"><b>${esc(r.author)}</b><span>${esc(r.created)} ${replyActions}</span></div>
+          ${r.isSpoiler ? `<details class="spoiler"><summary>Mostrar spoiler</summary><div class="reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div>${renderAttachments(r.attachments || [])}</details>` : `<div class="reply-body" data-raw="${esc(r.body)}">${md(r.body)}</div>${renderAttachments(r.attachments || [])}`}
         </section>`;
       }).join("")
     : `<p class="empty problem-replies-empty">Todavía no hay respuestas. Sé la primera persona en aportar una idea.</p>`;
@@ -1652,6 +1663,13 @@ async function ingresarPage() {
   };
 }
 
+async function refreshCurrentContent() {
+  const [route, id] = location.hash.slice(1).split("/");
+  if (route === "problema") return problem(id);
+  if (route === "tema") return topic(id);
+  return router();
+}
+
 // Event Listeners globales en main para edición y reporte
 main.addEventListener("click", async e => {
   // Editar respuesta
@@ -1675,8 +1693,7 @@ main.addEventListener("click", async e => {
   }
   
   if (e.target.classList.contains("btn-cancel-reply")) {
-    const [route, id] = location.hash.slice(1).split("/");
-    await topic(id);
+    await refreshCurrentContent();
   }
   
   if (e.target.classList.contains("btn-save-reply")) {
@@ -1687,8 +1704,7 @@ main.addEventListener("click", async e => {
     try {
       await updateReply(replyId, newBody);
       flash("Respuesta actualizada.");
-      const [route, id] = location.hash.slice(1).split("/");
-      await topic(id);
+      await refreshCurrentContent();
     } catch (err) {
       flash(err.message);
     }
@@ -1783,8 +1799,7 @@ main.addEventListener("click", async e => {
       try {
         await deleteReply(replyId);
         flash("Respuesta eliminada con éxito.");
-        const [route, id] = location.hash.slice(1).split("/");
-        await topic(id);
+        await refreshCurrentContent();
       } catch (err) {
         flash("Error al eliminar la respuesta: " + err.message);
       }
