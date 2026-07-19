@@ -237,17 +237,18 @@ async function problem(id){
   if(!p)return archive();
   const user = await currentUser();
   const profile = await getCurrentUserProfile();
-  
-  let discussionHTML = "";
-  if(p.topicId){
-    discussionHTML = `<a class="button" href="#tema/${p.topicId}">Abrir discusión y soluciones</a>`;
-  } else {
-    if(user) {
-      discussionHTML = `<div style="margin-top:1.5rem;"><p class="muted" style="margin-bottom:0.8rem;">Este problema todavía no tiene una discusión asociada.</p><a class="button" href="#nuevo-tema/${p.id}">Crear discusión para este problema</a></div>`;
-    } else {
-      discussionHTML = `<p class="muted">Este problema todavía no tiene una discusión asociada. <button class="button button-quiet" id="reply-auth-btn" style="margin-top:0.5rem; display:block;">Ingresá para iniciar la discusión</button></p>`;
-    }
-  }
+  // Las respuestas se almacenan en el tema interno asociado al problema.
+  const discussion = p.topicId ? await getTopic(p.topicId) : null;
+  const responses = discussion?.responses || [];
+  const responsesHTML = responses.length
+    ? responses.map(r => {
+        const bodyHTML = `<div class="reply-body">${md(r.body)}</div>${renderAttachments(r.attachments || [])}`;
+        return `<section class="reply" id="reply-${r.id}">
+          <div class="reply-head"><b>${esc(r.author)}</b><span>${esc(r.created)}</span></div>
+          ${r.isSpoiler ? `<details class="spoiler"><summary>Mostrar spoiler</summary>${bodyHTML}</details>` : bodyHTML}
+        </section>`;
+      }).join("")
+    : `<p class="empty problem-replies-empty">Todavía no hay respuestas. Sé la primera persona en aportar una idea.</p>`;
 
   let editBtnHTML = "";
   if (profile && (profile.role === "moderator" || profile.role === "admin")) {
@@ -264,34 +265,41 @@ async function problem(id){
     ${editBtnHTML}
     <div class="topic-body">${md(p.statement)}</div>
     ${renderAttachments(p.attachments || [])}
-    ${discussionHTML}
-    <p class="muted" style="margin-top:2rem;">Las soluciones pueden contener spoilers y se muestran ocultas por defecto.</p>
-    </article>`;
+    <section class="problem-replies">
+      <div class="problem-replies-head">
+        <h2>Respuestas</h2>
+        <span class="muted">${responses.length} ${responses.length === 1 ? "respuesta" : "respuestas"}</span>
+      </div>
+      <p class="muted">Las soluciones marcadas como spoiler se muestran ocultas por defecto.</p>
+      <div class="replies-container">${responsesHTML}</div>
+    </section>
+    ${user ? `
+      <section class="reply-form-section problem-reply-form">
+        <h2>Responder al problema</h2>
+        <form id="reply-problem-form">
+          <div class="form-row">
+            <label for="reply-body-problem">Tu respuesta</label>
+            <textarea id="reply-body-problem" class="input" placeholder="Escribí tu respuesta aquí..." required></textarea>
+          </div>
+          <div class="form-row spoiler-option">
+            <input type="checkbox" id="reply-spoiler-problem">
+            <label for="reply-spoiler-problem">Marcar como spoiler (ocultar por defecto)</label>
+          </div>
+          <button class="button">Enviar respuesta</button>
+        </form>
+      </section>` : `
+      <section class="problem-reply-login">
+        <p class="muted">Ingresá con tu cuenta para responder este problema.</p>
+        <button class="button button-quiet" id="reply-auth-btn">Ingresar para responder</button>
+      </section>`}
+  </article>`;
     
     if (document.getElementById("edit-problem-btn")) {
       document.getElementById("edit-problem-btn").onclick = () => showEditProblemModal(p);
     }
 
-    // Direct reply form for logged‑in users
+    // Si aún no existe el tema interno, se crea al enviar la respuesta directa.
     if (user) {
-      const replyFormHTML = `
-        <section class="reply-form-section" style="border-top:1px solid var(--line); padding-top:2rem; margin-top:2rem;">
-          <h3 style="font-family:var(--serif)">Responder al problema</h3>
-          <form id="reply-problem-form">
-            <div class="form-row">
-              <textarea id="reply-body-problem" class="input" placeholder="Escribí tu respuesta aquí..." required style="min-height:100px;"></textarea>
-            </div>
-            <div class="form-row" style="display: flex; align-items: center; gap: 0.5rem; margin: 1rem 0;">
-              <input type="checkbox" id="reply-spoiler-problem">
-              <label for="reply-spoiler-problem" style="font-size:0.9rem; font-weight:normal; cursor:pointer;">Marcar como spoiler (ocultar por defecto)</label>
-            </div>
-            <button class="button" style="margin-top:0.8rem;">Enviar respuesta</button>
-          </form>
-        </section>
-      `;
-      const container = document.createElement('div');
-      container.innerHTML = replyFormHTML;
-      main.appendChild(container);
       document.getElementById('reply-problem-form').onsubmit = async e => {
         e.preventDefault();
         const body = document.getElementById('reply-body-problem').value.trim();

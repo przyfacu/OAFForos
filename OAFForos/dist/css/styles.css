@@ -304,3 +304,53 @@
   flex-shrink: 0;
 }
 
+/* Respuestas integradas en la ficha de cada problema. */
+.problem-replies {
+  margin-top: 2.5rem;
+}
+.problem-replies-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.problem-replies h2,
+.reply-form-section h2 {
+  font: 600 1.7rem var(--serif);
+  margin: 0;
+}
+.problem-replies-empty {
+  border-top: 1px solid var(--line);
+  margin: 1rem 0 0;
+}
+.problem-reply-form {
+  border-top: 1px solid var(--line);
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+}
+.problem-reply-form textarea {
+  min-height: 120px;
+}
+.spoiler-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.spoiler-option label {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+.problem-reply-login {
+  border-top: 1px solid var(--line);
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+}
+@media (max-width: 720px) {
+  .problem-replies-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+}
