@@ -315,6 +315,7 @@ async function problem(id){
         await problem(p.id);
       };
     }
+  }
 
 async function showEditProblemModal(p) {
   modal.style.width = "min(650px, calc(100% - 2rem))";
