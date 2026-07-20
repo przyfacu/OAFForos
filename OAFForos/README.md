@@ -4,7 +4,7 @@ Beta pública para la comunidad argentina de olimpíadas de física. El cliente 
 
 ## Inicio rápido
 
-1. Cree un proyecto en Supabase y ejecute [`supabase/schema.sql`](supabase/schema.sql) en el SQL Editor.
+1. Cree un proyecto en Supabase y ejecute [`supabase/schema.sql`](supabase/schema.sql) y luego [`supabase/delete_user_and_content.sql`](supabase/delete_user_and_content.sql) en el SQL Editor.
 2. Copie `js/config.example.js` a `js/config.js` y complete la URL y clave pública del proyecto.
 3. Active los proveedores **Email** y **Google** en Authentication de Supabase. Configure las URL de redirección de su entorno y de producción.
 4. Sirva esta carpeta con cualquier servidor estático, por ejemplo: `python3 -m http.server 8080`.

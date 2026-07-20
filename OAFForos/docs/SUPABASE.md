@@ -77,3 +77,16 @@ Para habilitar la subida de imágenes, PDFs y archivos en temas, respuestas y pr
 > **Nota**: Los adjuntos se guardan bajo rutas como `topic/<id>/...`,
 > `reply/<id>/...`. En modo demostración (sin Supabase), las imágenes se
 > previsual­izas usando `object URL` locales y no se persisten.
+
+## 7. Migraciones de la interfaz de moderación
+
+Ejecute una vez `supabase/delete_user_and_content.sql` desde SQL Editor. Es
+necesario en todos los proyectos para que la eliminación desde la consola
+borre de forma atómica la cuenta de Auth, el perfil y el contenido.
+
+Si el proyecto ya existía antes de que se agregara la auditoría de moderación,
+ejecute también `supabase/moderation_update.sql` para registrar quién y cuándo
+moderó un tema.
+
+El script de eliminación sólo permite invocar la operación a moderadores y
+administradores y no permite eliminar administradores desde la interfaz.

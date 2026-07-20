@@ -898,14 +898,31 @@ export async function updateTopicModerated(id, title, body, moderatorUsername) {
   }
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No estás autenticado.");
-  const { data, error } = await supabase
+  const moderationUpdate = await supabase
     .from("topics")
     .update({ title, body, moderated_by: user.id, moderated_at: new Date().toISOString() })
     .eq("id", id)
     .select("id")
     .single();
+  if (!moderationUpdate.error) return moderationUpdate.data;
+
+  // Las instalaciones anteriores a moderation_update.sql no tienen estas
+  // columnas. La edición sigue siendo posible, pero sin la marca de auditoría.
+  const message = `${moderationUpdate.error.message || ""} ${moderationUpdate.error.details || ""}`.toLowerCase();
+  const missingModerationColumn = moderationUpdate.error.code === "PGRST204"
+    || moderationUpdate.error.code === "42703"
+    || message.includes("moderated_by")
+    || message.includes("moderated_at");
+  if (!missingModerationColumn) throw moderationUpdate.error;
+
+  const { data, error } = await supabase
+    .from("topics")
+    .update({ title, body })
+    .eq("id", id)
+    .select("id")
+    .single();
   if (error) throw error;
-  return data;
+  return { ...data, moderationTracked: false };
 }
 
 /**
@@ -942,26 +959,11 @@ export async function deleteUserAndPosts(userId) {
     });
     return;
   }
-  // Eliminar replies del usuario
-  const { error: repliesError } = await supabase
-    .from("replies")
-    .delete()
-    .eq("author_id", userId);
-  if (repliesError) throw repliesError;
-
-  // Eliminar topics del usuario
-  const { error: topicsError } = await supabase
-    .from("topics")
-    .delete()
-    .eq("author_id", userId);
-  if (topicsError) throw topicsError;
-
-  // Eliminar perfil
-  const { error: profileError } = await supabase
-    .from("profiles")
-    .delete()
-    .eq("id", userId);
-  if (profileError) throw profileError;
+  const { data, error } = await supabase.rpc("delete_user_and_content", {
+    target_user_id: userId
+  });
+  if (error) throw error;
+  if (data !== true) throw new Error("No se pudo confirmar la eliminación del usuario.");
 }
 
 /**

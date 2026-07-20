@@ -350,38 +350,49 @@ async function problem(id){
       const problemReplyUploader = initAttachmentUploader("reply-problem-files");
       document.getElementById('reply-problem-form').onsubmit = async e => {
         e.preventDefault();
+        const form = e.currentTarget;
+        if (form.dataset.submitting === "true") return;
+        form.dataset.submitting = "true";
+        const submitBtn = form.querySelector(".button");
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Enviando..."; }
         const body = document.getElementById('reply-body-problem').value.trim();
         const isSpoiler = document.getElementById('reply-spoiler-problem').checked;
-        let topicId = p.topicId;
-        if (!topicId) {
-          const categories = await getCategories();
-          const catId = categories.length ? categories[0].id : null;
-          const newTopic = await createTopic({
-            category_id: catId,
-            title: `Discusión: Problema ${p.number} - ${p.title}`,
-            body: '',
-            tags: [],
-            problem_id: p.id
-          });
-          topicId = newTopic.id;
-          p.topicId = topicId;
-        }
-        const reply = await createReply(topicId, body, isSpoiler);
-        const files = problemReplyUploader.getFiles();
-        if (files.length > 0) {
-          try {
-            const uploaded = await uploadAttachments(files, "reply", reply.id);
-            if (!supabase) {
-              const topicObj = demo.topics.find(t => t.id === topicId);
-              const replyObj = topicObj?.responses?.find(r => r.id === reply.id);
-              if (replyObj) replyObj.attachments = uploaded;
-            }
-          } catch (uploadErr) {
-            flash("Respuesta publicada, pero error al subir imágenes: " + uploadErr.message);
+        try {
+          let topicId = p.topicId;
+          if (!topicId) {
+            const categories = await getCategories();
+            const catId = categories.length ? categories[0].id : null;
+            const newTopic = await createTopic({
+              category_id: catId,
+              title: `Discusión: Problema ${p.number} - ${p.title}`,
+              body: '',
+              tags: [],
+              problem_id: p.id
+            });
+            topicId = newTopic.id;
+            p.topicId = topicId;
           }
+          const reply = await createReply(topicId, body, isSpoiler);
+          const files = problemReplyUploader.getFiles();
+          if (files.length > 0) {
+            try {
+              const uploaded = await uploadAttachments(files, "reply", reply.id);
+              if (!supabase) {
+                const topicObj = demo.topics.find(t => t.id === topicId);
+                const replyObj = topicObj?.responses?.find(r => r.id === reply.id);
+                if (replyObj) replyObj.attachments = uploaded;
+              }
+            } catch (uploadErr) {
+              flash("Respuesta publicada, pero error al subir imágenes: " + uploadErr.message);
+            }
+          }
+          flash('Respuesta enviada con éxito.');
+          await problem(p.id);
+        } catch (err) {
+          flash(err.message);
+          form.dataset.submitting = "false";
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Enviar respuesta"; }
         }
-        flash('Respuesta enviada con éxito.');
-        await problem(p.id);
       };
     }
   }
@@ -607,11 +618,14 @@ async function newTopic(problemId){
 
   document.querySelector("#topic-form").onsubmit=async e=>{
     e.preventDefault();
-    const submitBtn = e.target.querySelector(".button:not([type='button'])") || e.target.querySelector(".button");
+    const form = e.currentTarget;
+    if (form.dataset.submitting === "true") return;
+    form.dataset.submitting = "true";
+    const submitBtn = form.querySelector(".button:not([type='button'])") || form.querySelector(".button");
     try{
       submitBtn.disabled = true;
       submitBtn.textContent = "Publicando...";
-      let f=e.target;
+      let f=form;
       let tagsList = f.tags.value.split(",")
         .map(t => t.toLowerCase().trim().replace(/[^a-z0-9-]/g, ""))
         .filter(t => t.length >= 2 && t.length <= 40);
@@ -643,6 +657,7 @@ async function newTopic(problemId){
       location.hash=`#tema/${row.id}`;
     }catch(err){
       flash(err.message);
+      form.dataset.submitting = "false";
       submitBtn.disabled = false;
       submitBtn.textContent = "Publicar tema";
     }
@@ -714,10 +729,13 @@ function propose(){
 
   document.querySelector("#proposal-form").onsubmit=async e=>{
     e.preventDefault();
-    const submitBtn = e.target.querySelector(".button");
+    const form = e.currentTarget;
+    if (form.dataset.submitting === "true") return;
+    form.dataset.submitting = "true";
+    const submitBtn = form.querySelector(".button");
     try{
       if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Enviando..."; }
-      let f=e.target;
+      let f=form;
       const proposalPayload = {
         competition: f.competition.value,
         level: f.level.value,
@@ -747,6 +765,7 @@ function propose(){
       location.hash="#archivo";
     }catch(err){
       flash(err.message);
+      form.dataset.submitting = "false";
       if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Enviar para revisión"; }
     }
   }
@@ -1800,8 +1819,10 @@ main.addEventListener("click", async e => {
     try {
       if (isStaffEdit) {
         const profile = await getCurrentUserProfile();
-        await updateTopicModerated(topicId, newTitle, newBody, profile?.username || "moderador");
-        flash("Tema actualizado por moderación.");
+        const result = await updateTopicModerated(topicId, newTitle, newBody, profile?.username || "moderador");
+        flash(result.moderationTracked === false
+          ? "Tema actualizado. Ejecutá la migración de moderación para registrar la intervención."
+          : "Tema actualizado por moderación.");
       } else {
         await updateTopic(topicId, newTitle, newBody);
         flash("Tema actualizado.");
@@ -2011,11 +2032,17 @@ main.addEventListener("click", async e => {
 main.addEventListener("submit", async e => {
   if (e.target.id === "reply-form") {
     e.preventDefault();
+    const form = e.target;
+    if (form.dataset.submitting === "true") return;
+    form.dataset.submitting = "true";
     const [route, topicId] = location.hash.slice(1).split("/");
-    const body = e.target.querySelector("#reply-body").value.trim();
-    const isSpoiler = e.target.querySelector("#reply-spoiler").checked;
-    if (!body) return;
-    const submitBtn = e.target.querySelector(".button");
+    const body = form.querySelector("#reply-body").value.trim();
+    const isSpoiler = form.querySelector("#reply-spoiler").checked;
+    if (!body) {
+      form.dataset.submitting = "false";
+      return;
+    }
+    const submitBtn = form.querySelector(".button");
     try {
       if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Enviando..."; }
       const reply = await createReply(topicId, body, isSpoiler);
@@ -2045,6 +2072,7 @@ main.addEventListener("submit", async e => {
       await topic(topicId);
     } catch (err) {
       flash(err.message);
+      form.dataset.submitting = "false";
       if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Enviar respuesta"; }
     }
   }
