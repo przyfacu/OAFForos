@@ -246,8 +246,8 @@ async function forum(category){
       <div class="feed feed--pinned">${pinnedTopics.map(topicRow).join("")}</div>
     </div>` : "";
 
-  main.innerHTML=`<section class="page-head"><div class="eyebrow">Foro</div><h1>${esc(categoryName||"Preguntas y discusiones")}</h1><p>${esc(categoryName?categoryDesc:"Un espacio para hacer preguntas, discutir soluciones y aprender con otros estudiantes y entrenadores.")}</p></section><section class="forum-layout"><div class="section-head"><span class="muted">${topics.length} temas</span><a class="button" href="#nuevo-tema">Crear tema</a></div>${!category?`<div class="category-list">${categories.map(c=>`<a class="category-card" href="#foro/${c.id}"><span class="category-icon">${getIcon(c.id)}</span><h2>${esc(c.title)}</h2><p>${esc(c.description)}</p></a>`).join("")}</div><h2 style="margin-top:3rem;font-family:var(--serif)">Actividad reciente</h2>`:""}
-  ${pinnedSection}
+  main.innerHTML=`<section class="page-head"><div class="eyebrow">Foro</div><h1>${esc(categoryName||"Preguntas y discusiones")}</h1><p>${esc(categoryName?categoryDesc:"Un espacio para hacer preguntas, discutir soluciones y aprender con otros estudiantes y entrenadores.")}</p></section><section class="forum-layout">${pinnedSection}
+  <div class="section-head"><span class="muted">${topics.length} temas</span><a class="button" href="#nuevo-tema">Crear tema</a></div>${!category?`<div class="category-list">${categories.map(c=>`<a class="category-card" href="#foro/${c.id}"><span class="category-icon">${getIcon(c.id)}</span><h2>${esc(c.title)}</h2><p>${esc(c.description)}</p></a>`).join("")}</div><h2 style="margin-top:3rem;font-family:var(--serif)">Actividad reciente</h2>`:""}
   <div class="feed">${regularTopics.length?regularTopics.map(topicRow).join(""):'<p class="empty">Todavía no hay temas en esta categoría.</p>'}</div></section>`;
 }
 
