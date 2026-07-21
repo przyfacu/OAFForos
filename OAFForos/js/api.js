@@ -393,6 +393,7 @@ export async function getProblem(id) {
   return {
     id:data.id,
     number:data.number,
+    kind:data.kind || "theoretical",
     title:data.title,
     statement:data.statement,
     source:data.source_url || "Archivo OAFForos",
@@ -409,6 +410,7 @@ export async function updateProblem(id, data) {
     const p = demo.problems.find(x => x.id === id);
     if (!p) throw new Error("Problema no encontrado.");
     p.number = parseInt(data.number);
+    p.kind = data.kind;
     p.title = data.title;
     p.statement = data.statement;
     p.source = data.source_url || "Archivo OAFForos";
@@ -417,6 +419,7 @@ export async function updateProblem(id, data) {
   
   const { data: updated, error } = await supabase.from("problems").update({
     number: parseInt(data.number),
+    kind: data.kind,
     title: data.title,
     statement: data.statement,
     source_url: data.source_url || null
@@ -462,6 +465,7 @@ export async function publishProblem(proposalId, data) {
       id: newId,
       level: data.levelId || "oaf-2024-n2",
       number: parseInt(data.problemNumber),
+      kind: data.problemKind,
       title: data.problemTitle,
       statement: data.problemStatement,
       source: data.problemSourceUrl || "Archivo OAFForos",
@@ -546,6 +550,7 @@ export async function publishProblem(proposalId, data) {
   const { data: newProblem, error: problemError } = await supabase.from("problems").insert({
     level_id: levelId,
     number: parseInt(data.problemNumber),
+    kind: data.problemKind,
     title: data.problemTitle,
     statement: data.problemStatement,
     source_url: data.problemSourceUrl || null,

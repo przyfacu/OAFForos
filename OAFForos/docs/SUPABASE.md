@@ -93,5 +93,10 @@ Si el proyecto ya existía antes de que se agregara la auditoría de moderación
 ejecute también `supabase/moderation_update.sql` para registrar quién y cuándo
 moderó un tema.
 
+Si ya había creado la tabla de problemas, ejecute una vez
+`supabase/add_problem_kind.sql`. Agrega el tipo de problema, marca los
+existentes como **teóricos** y permite repetir un número dentro del mismo nivel
+cuando el otro problema es **experimental**.
+
 El script de eliminación sólo permite invocar la operación a moderadores y
 administradores y no permite eliminar administradores desde la interfaz.

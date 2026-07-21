@@ -20,6 +20,5 @@ export const demo = {
   ],
   editions: [{id:"oaf-2024", competition:"oaf", title:"Edición 2024", description:"Instancia nacional"},{id:"oaf-2023",competition:"oaf",title:"Edición 2023",description:"Instancia nacional"}],
   levels: [{id:"oaf-2024-n1",edition:"oaf-2024",title:"Nivel 1"},{id:"oaf-2024-n2",edition:"oaf-2024",title:"Nivel 2"}],
-  problems: [{id:"problema-demo",level:"oaf-2024-n2",number:3,title:"El bloque y la polea",statement:"Un bloque de masa $m$ se encuentra sobre un plano inclinado de ángulo $\\theta$ y está unido mediante una cuerda ideal a una masa colgante. Determinar la condición para que el sistema permanezca en reposo.",source:"OAF 2024 · Nivel 2",topicId:"bloque-plano-inclinado"}]
+  problems: [{id:"problema-demo",level:"oaf-2024-n2",number:3,kind:"theoretical",title:"El bloque y la polea",statement:"Un bloque de masa $m$ se encuentra sobre un plano inclinado de ángulo $\\theta$ y está unido mediante una cuerda ideal a una masa colgante. Determinar la condición para que el sistema permanezca en reposo.",source:"OAF 2024 · Nivel 2",topicId:"bloque-plano-inclinado"}]
 };
-

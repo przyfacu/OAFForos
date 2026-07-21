@@ -4,6 +4,7 @@ create extension if not exists pgcrypto;
 create type public.app_role as enum ('member', 'moderator', 'admin');
 create type public.content_status as enum ('published', 'hidden', 'closed', 'deleted');
 create type public.proposal_status as enum ('pending', 'approved', 'rejected', 'changes_requested');
+create type public.problem_kind as enum ('theoretical', 'experimental');
 
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -68,6 +69,7 @@ create table public.problems (
   id uuid primary key default gen_random_uuid(),
   level_id uuid not null references public.levels(id),
 --   number smallint not null check (number > 0),
+  kind public.problem_kind not null default 'theoretical',
   title text not null,
   statement text not null,
 --   source_url text check (source_url is null or source_url ~ '^https?://'),
@@ -75,7 +77,7 @@ create table public.problems (
   status public.content_status not null default 'published',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique(level_id, number)
+  unique(level_id, number, kind)
 );
 alter table public.topics add constraint topics_problem_id_fkey foreign key (problem_id) references public.problems(id) on delete set null;
 

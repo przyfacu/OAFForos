@@ -14,6 +14,8 @@ La guía detallada de creación del proyecto, autenticación y verificación est
 
 Sin configurar Supabase, el sitio se abre con contenido demostrativo de solo lectura para facilitar el diseño y las pruebas visuales.
 
+Si el proyecto ya estaba creado antes de incorporar problemas teóricos y experimentales, ejecute una vez [`supabase/add_problem_kind.sql`](supabase/add_problem_kind.sql).
+
 ## Estructura
 
 - `index.html`, `css/`, `js/`: interfaz estática modular.

@@ -259,11 +259,13 @@ async function archive(){
 }
 
 const archiveItems=items=>items.map(x=>`<a class="archive-item" href="#archivo/${x.id}"><span><strong>${esc(x.title)}</strong><small>${esc(x.type)} · ${esc(x.description)}</small></span><span>›</span></a>`).join("");
+const problemKindLabel = kind => kind === "experimental" ? "experimental" : "teórico";
+const problemLabel = p => `Problema ${problemKindLabel(p.kind)} ${p.number}`;
 
 async function archiveDetail(id){
   let {item,label,items}=await archiveChildren(id);
   if(!item){return archive();}
-  main.innerHTML=`<section class="page-head"><div class="eyebrow">Archivo / ${label}</div><h1>${esc(item.title)}</h1><p>${esc(item.description||"Seleccioná una entrada para continuar el recorrido.")}</p></section><section class="forum-layout"><p class="archive-path"><a href="#archivo">Archivo</a> <span>/</span> ${label}</p><div class="archive-list">${items.map(x=>`<a class="archive-item" href="#${x.number?"problema":"archivo"}/${x.id}"><span><strong>${x.number?`Problema ${x.number}: `:""}${esc(x.title)}</strong><small>${esc(x.source||x.description||"")}</small></span><span>›</span></a>`).join("")}</div></section>`;
+  main.innerHTML=`<section class="page-head"><div class="eyebrow">Archivo / ${label}</div><h1>${esc(item.title)}</h1><p>${esc(item.description||"Seleccioná una entrada para continuar el recorrido.")}</p></section><section class="forum-layout"><p class="archive-path"><a href="#archivo">Archivo</a> <span>/</span> ${label}</p><div class="archive-list">${items.map(x=>`<a class="archive-item" href="#${x.number?"problema":"archivo"}/${x.id}"><span><strong>${x.number?`${problemLabel(x)}: `:""}${esc(x.title)}</strong><small>${esc(x.source||x.description||"")}</small></span><span>›</span></a>`).join("")}</div></section>`;
 }
 
 async function problem(id){
@@ -306,7 +308,7 @@ async function problem(id){
 
   main.innerHTML=`<article class="topic">
     <div class="eyebrow">${esc(p.source)}</div>
-    <h1>Problema ${p.number}: ${esc(p.title)}</h1>
+    <h1>${problemLabel(p)}: ${esc(p.title)}</h1>
     ${editBtnHTML}
     <div class="topic-body">${renderBodyWithInlineImages(p.statement, p.attachments)}</div>
     ${renderAttachments(p.attachments || [])}
@@ -406,10 +408,17 @@ async function showEditProblemModal(p) {
       <p class="muted" style="margin-bottom: 1.5rem;">Modificá los datos del problema oficial.</p>
       
       <form id="edit-problem-form">
-        <div style="display:grid; grid-template-columns: 80px 1fr; gap:0.5rem;">
+        <div style="display:grid; grid-template-columns: 80px 160px 1fr; gap:0.5rem;">
           <div>
             <label for="edit-prob-number" style="font-size:0.8rem; font-weight:600;">Número</label>
             <input class="input" type="number" id="edit-prob-number" min="1" required value="${p.number}">
+          </div>
+          <div>
+            <label for="edit-prob-kind" style="font-size:0.8rem; font-weight:600;">Tipo</label>
+            <select class="input" id="edit-prob-kind" required>
+              <option value="theoretical"${p.kind !== "experimental" ? " selected" : ""}>Teórico</option>
+              <option value="experimental"${p.kind === "experimental" ? " selected" : ""}>Experimental</option>
+            </select>
           </div>
           <div>
             <label for="edit-prob-title" style="font-size:0.8rem; font-weight:600;">Título</label>
@@ -439,6 +448,7 @@ async function showEditProblemModal(p) {
     ev.preventDefault();
     const payload = {
       number: document.getElementById("edit-prob-number").value,
+      kind: document.getElementById("edit-prob-kind").value,
       title: document.getElementById("edit-prob-title").value.trim(),
       statement: document.getElementById("edit-prob-statement").value.trim(),
       source_url: document.getElementById("edit-prob-source").value.trim()
@@ -1105,10 +1115,17 @@ async function showApproveProposalModal(p) {
         <div style="border-top: 1px solid var(--line); margin-top:1.5rem; padding-top:1rem;">
           <h4 style="font-family:var(--serif); margin:0 0 0.8rem 0;">Datos del problema</h4>
           
-          <div style="display:grid; grid-template-columns: 80px 1fr; gap:0.5rem;">
+          <div style="display:grid; grid-template-columns: 80px 160px 1fr; gap:0.5rem;">
             <div>
               <label for="modal-prob-number" style="font-size:0.8rem; font-weight:600;">Número</label>
               <input class="input" type="number" id="modal-prob-number" min="1" required placeholder="Ej. 1">
+            </div>
+            <div>
+              <label for="modal-prob-kind" style="font-size:0.8rem; font-weight:600;">Tipo</label>
+              <select class="input" id="modal-prob-kind" required>
+                <option value="theoretical">Teórico</option>
+                <option value="experimental">Experimental</option>
+              </select>
             </div>
             <div>
               <label for="modal-prob-title" style="font-size:0.8rem; font-weight:600;">Título</label>
@@ -1290,6 +1307,7 @@ async function showApproveProposalModal(p) {
       levelId: levelSelect.value !== "new" ? levelSelect.value : null,
       newLevel: levelSelect.value === "new" ? levelNew.value.trim() : null,
       problemNumber: document.getElementById("modal-prob-number").value,
+      problemKind: document.getElementById("modal-prob-kind").value,
       problemTitle: document.getElementById("modal-prob-title").value.trim(),
       problemStatement: document.getElementById("modal-prob-statement").value.trim(),
       problemSourceUrl: document.getElementById("modal-prob-source").value.trim(),
