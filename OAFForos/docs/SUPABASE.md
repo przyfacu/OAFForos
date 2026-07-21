@@ -74,6 +74,11 @@ Para habilitar la subida de imágenes, PDFs y archivos en temas, respuestas y pr
 2. Opcionalmente en **Storage > Policies**, verifique que las tres políticas
    `attachments_*` estén activas en el bucket `attachments`.
 
+Si el proyecto ya tenía adjuntos configurados, ejecute también una vez
+`supabase/fix_attachments_rls.sql`. Reemplaza una política antigua e insegura
+que permitía a cualquier usuario autenticado borrar metadatos de adjuntos
+ajenos.
+
 > **Nota**: Los adjuntos se guardan bajo rutas como `topic/<id>/...`,
 > `reply/<id>/...`. En modo demostración (sin Supabase), las imágenes se
 > previsual­izas usando `object URL` locales y no se persisten.
