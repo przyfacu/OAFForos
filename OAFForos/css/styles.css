@@ -276,6 +276,8 @@
 }
 .feed--pinned .topic-row {
   background: transparent;
+  padding-right: 1rem;
+  padding-left: 1rem;
 }
 .feed--pinned .topic-row:last-child {
   border-bottom: none;
@@ -283,12 +285,6 @@
 .topic-row--pinned {
   background: linear-gradient(90deg, #eaf4f7 0%, transparent 100%);
 }
-.pin-badge {
-  font-size: 0.85rem;
-  margin-right: 0.15rem;
-  flex-shrink: 0;
-}
-
 /* ── Botón de acción en topic (editar, reportar, fijar) ── */
 .action-btn {
   background: transparent;

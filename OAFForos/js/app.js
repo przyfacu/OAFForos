@@ -207,7 +207,7 @@ function initAttachmentUploader(inputId) {
   };
 }
 
-const topicRow = t => `<a class="topic-row${t.isPinned ? ' topic-row--pinned' : ''}" href="#tema/${t.id}">${t.isPinned ? '<span class="pin-badge" title="Tema fijado">📌</span>' : ''}<span class="topic-count"><b>${t.replies ?? 0}</b>respuestas</span><span><h3>${esc(t.title)}</h3><span class="topic-meta">${esc(t.author)} · ${esc(t.created)}</span><br>${(t.tags||[]).map(x=>`<i class="tag">${esc(x)}</i>`).join("")}</span><span class="muted">›</span></a>`;
+const topicRow = t => `<a class="topic-row${t.isPinned ? ' topic-row--pinned' : ''}" href="#tema/${t.id}"><span class="topic-count"><b>${t.replies ?? 0}</b>respuestas</span><span><h3>${esc(t.title)}</h3><span class="topic-meta">${esc(t.author)} · ${esc(t.created)}</span><br>${(t.tags||[]).map(x=>`<i class="tag">${esc(x)}</i>`).join("")}</span><span class="muted">›</span></a>`;
 
 const icons = { mecanica: "↗", electromagnetismo: "ϟ", termodinamica: "◌", ondas: "≈", moderna: "◈", comunidad: "○" };
 const getIcon = id => icons[id] || "○";
