@@ -990,7 +990,7 @@ async function moderationPage() {
     };
   }
 
-  // --- Solo admin: gestionar roles de moderación ---
+  // --- Solo admin: Añadir/gestionar moderadores ---
   if (isAdmin) {
     const modSearchInput = document.getElementById("mod-search-input");
     const modSearchBtn = document.getElementById("mod-search-btn");
@@ -1007,16 +1007,15 @@ async function moderationPage() {
           return;
         }
         modSearchResults.innerHTML = users.map(u => {
+          const isMod = u.role === "moderator";
           const isAdminRole = u.role === "admin";
           let actionBtn = "";
           if (isAdminRole) {
             actionBtn = `<span class="muted" style="font-size:0.8rem;">Es administrador</span>`;
+          } else if (isMod) {
+            actionBtn = `<button class="button button-quiet btn-demote-mod" data-id="${u.id}" data-username="${esc(u.username)}" style="padding:0.3rem 0.6rem; font-size:0.8rem;">Quitar rol moderador</button>`;
           } else {
-            actionBtn = `<select class="staff-role-select" data-id="${u.id}" data-username="${esc(u.username)}" style="padding:0.3rem; font-size:0.8rem;">
-              <option value="member" ${u.role === "member" ? "selected" : ""}>Miembro</option>
-              <option value="moderator" ${u.role === "moderator" ? "selected" : ""}>Moderador</option>
-              <option value="primex_admin" ${u.role === "primex_admin" ? "selected" : ""}>Primex del admin</option>
-            </select>`;
+            actionBtn = `<button class="button btn-promote-mod" data-id="${u.id}" data-username="${esc(u.username)}" style="padding:0.3rem 0.6rem; font-size:0.8rem; background:var(--blue);">Hacer moderador</button>`;
           }
           return `
             <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0; border-bottom:1px solid var(--line);">
@@ -1037,11 +1036,13 @@ async function moderationPage() {
 
     if (modSearchResults) {
       modSearchResults.onclick = async e => {
-        if (e.target.classList.contains("staff-role-select")) {
+        const isPromote = e.target.classList.contains("btn-promote-mod");
+        const isDemote = e.target.classList.contains("btn-demote-mod");
+        if (isPromote || isDemote) {
           const userId = e.target.getAttribute("data-id");
           const username = e.target.getAttribute("data-username");
-          const newRole = e.target.value;
-          const actionText = `asignar el rol ${roleLabel(newRole)} a`;
+          const newRole = isPromote ? "moderator" : "member";
+          const actionText = isPromote ? "promover a moderador a" : "quitar el rol de moderador a";
           if (confirm(`¿Querés ${actionText} "${username}"?`)) {
             try {
               e.target.disabled = true;
