@@ -688,6 +688,7 @@ function about(){
     <div class="eyebrow">Acerca de OAFForos</div>
     <h1>¡Bienvenido a OAFForos!</h1>
     <p>OAFForos es un proyecto comunitario está principalmente orientado a estudiantes, docentes, entrenadores y exolímpicos de la Olimpíada Argentina de Física, aunque cualquier persona de cualquier nacionalidad puede utilizarlo.</p>
+    <p><strong>Importante:</strong> OAFForos no es un sitio oficial ni está afiliado, respaldado o relacionado con la Olimpíada Argentina de Física (OAF).</p>
   </section>
   <section class="section two-column">
     <div>
