@@ -1449,7 +1449,7 @@ async function establecerUsernamePage() {
       <p>Para completar tu registro, por favor elige un nombre de usuario único.</p>
     </section>
     <section class="forum-layout" style="max-width: 480px; margin: auto; padding-bottom: 5rem;">
-      <div class="sidebar-box" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
+      <div class="sidebar-box auth-panel" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
         <form id="username-setup-form">
           <div class="form-row">
             <label for="setup-username">Nombre de usuario (username)</label>
@@ -1503,7 +1503,7 @@ async function restablecerContrasenaPage() {
       <p>Establece una nueva contraseña para tu cuenta.</p>
     </section>
     <section class="forum-layout" style="max-width: 480px; margin: auto; padding-bottom: 5rem;">
-      <div class="sidebar-box" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
+      <div class="sidebar-box auth-panel" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
         <form id="reset-password-form">
           <div class="form-row">
             <label for="reset-new-password">Nueva contraseña</label>
@@ -1545,13 +1545,13 @@ async function ingresarPage() {
         <p>Hola, <strong>${esc(username)}</strong>. Estás conectado con el correo ${esc(u.email)}.</p>
       </section>
       <section class="forum-layout" style="max-width: 480px; margin: auto; padding-bottom: 5rem; display: flex; flex-direction: column; gap: 2rem;">
-        <div class="sidebar-box" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
+        <div class="sidebar-box auth-panel" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
           <h3 style="margin-bottom: 1rem; font-family: var(--serif); text-align: center;">Seguridad</h3>
           <p class="muted" style="font-size: 0.9rem; margin-bottom: 1.5rem; text-align: center;">Para cambiar tu contraseña, te enviaremos un correo electrónico de verificación.</p>
           <button class="button" id="reset-password-request-btn" style="width: 100%; padding: 0.8rem;">Enviar correo de cambio de contraseña</button>
         </div>
 
-        <div class="sidebar-box" style="text-align: center; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
+        <div class="sidebar-box auth-panel" style="text-align: center; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
           <h3 style="margin-bottom: 1.5rem; font-family: var(--serif);">Cerrar Sesión</h3>
           <button class="button btn-danger" id="logout-btn" style="width: 100%; padding: 0.8rem;">Cerrar Sesión</button>
         </div>
@@ -1585,7 +1585,7 @@ async function ingresarPage() {
       <p>Inicia sesión o regístrate para participar en el foro y proponer problemas.</p>
     </section>
     <section class="forum-layout" style="max-width: 480px; margin: auto; padding-bottom: 5rem;">
-      <div class="sidebar-box" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
+      <div class="sidebar-box auth-panel" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); padding: 2rem;">
         <!-- Tabs -->
         <div style="display: flex; border-bottom: 2px solid var(--line); margin-bottom: 1.5rem; justify-content: space-around;">
           <button id="tab-login" class="action-btn" style="flex: 1; padding: 0.8rem; font-size: 1rem; text-decoration: none; border-bottom: 3px solid var(--gold); font-weight: 600; color: var(--navy); background: transparent;">Iniciar Sesión</button>

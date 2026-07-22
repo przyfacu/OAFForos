@@ -378,4 +378,8 @@
     flex-direction: column;
     gap: 0.15rem;
   }
+
+  .sidebar-box.auth-panel {
+    display: block;
+  }
 }
