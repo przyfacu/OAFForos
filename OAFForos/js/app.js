@@ -2,6 +2,15 @@ import { demo } from "./demo-data.js";
 import { configured, supabase, currentUser } from "./supabase.js";
 import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, deleteTopic, pinTopic, createReply, updateReply, deleteReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword, uploadAttachments, updateProblem, updateTopicModerated, searchUsersByUsername, deleteUserAndPosts, setUserRole } from "./api.js";
 
+const STAFF_ROLES = new Set(["moderator", "primex_admin", "admin"]);
+const roleLabel = role => ({
+  member: "Miembro",
+  moderator: "Moderador",
+  primex_admin: "Primex del admin",
+  admin: "Administrador"
+}[role] || role);
+const isStaffProfile = profile => Boolean(profile && STAFF_ROLES.has(profile.role));
+
 const main = document.querySelector("main"), modal = document.querySelector("#modal"), notice = document.querySelector("#notice");
 let activeProposals = [];
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
@@ -276,7 +285,7 @@ async function problem(id){
   // Las respuestas se almacenan en el tema interno asociado al problema.
   const discussion = p.topicId ? await getTopic(p.topicId) : null;
   const responses = discussion?.responses || [];
-  const isStaff = profile && (profile.role === "moderator" || profile.role === "admin");
+  const isStaff = isStaffProfile(profile);
   const responsesHTML = responses.length
     ? responses.map(r => {
         let replyActions = "";
@@ -298,7 +307,7 @@ async function problem(id){
     : `<p class="empty problem-replies-empty">Todavía no hay respuestas. Sé la primera persona en aportar una idea.</p>`;
 
   let editBtnHTML = "";
-  if (profile && (profile.role === "moderator" || profile.role === "admin")) {
+  if (isStaffProfile(profile)) {
     editBtnHTML = `
       <div style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
         <button class="button button-quiet" id="edit-problem-btn" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">✏️ Editar problema</button>
@@ -471,7 +480,7 @@ async function topic(id){
   
   const user = await currentUser();
   const profile = await getCurrentUserProfile();
-  const isStaff = profile && (profile.role === "moderator" || profile.role === "admin");
+  const isStaff = isStaffProfile(profile);
   const isOwner = user && user.id === t.authorId;
   let topicActions = "";
   if (user) {
@@ -828,7 +837,7 @@ async function searchPage(query) {
 
 async function moderationPage() {
   const profile = await getCurrentUserProfile();
-  if (!profile || (profile.role !== "moderator" && profile.role !== "admin")) {
+  if (!isStaffProfile(profile)) {
     location.hash = "#inicio";
     return;
   }
@@ -864,10 +873,10 @@ async function moderationPage() {
       </div>
 
       ${isAdmin ? `
-      <!-- Solo admin: añadir moderadores -->
+      <!-- Solo admin: gestionar el equipo de moderación -->
       <div style="margin-top:3rem; border-top:1px solid var(--line); padding-top:2.5rem;">
-        <h2 style="font-family:var(--serif); margin-bottom:1rem;">🛡️ Gestionar moderadores</h2>
-        <p class="muted" style="margin-bottom:1rem; font-size:0.9rem;">Buscá un usuario por su username para ascenderlo a moderador o volver a member.</p>
+        <h2 style="font-family:var(--serif); margin-bottom:1rem;">🛡️ Gestionar equipo de moderación</h2>
+        <p class="muted" style="margin-bottom:1rem; font-size:0.9rem;">Buscá un usuario para asignarle Miembro, Moderador o Primex del admin.</p>
         <div style="display:flex; gap:0.5rem; max-width:500px; margin-bottom:1rem;">
           <input class="input" id="mod-search-input" placeholder="Buscar por username..." style="flex:1;">
           <button class="button" id="mod-search-btn">Buscar</button>
@@ -981,7 +990,7 @@ async function moderationPage() {
     };
   }
 
-  // --- Solo admin: Añadir/gestionar moderadores ---
+  // --- Solo admin: gestionar roles de moderación ---
   if (isAdmin) {
     const modSearchInput = document.getElementById("mod-search-input");
     const modSearchBtn = document.getElementById("mod-search-btn");
@@ -998,19 +1007,20 @@ async function moderationPage() {
           return;
         }
         modSearchResults.innerHTML = users.map(u => {
-          const isMod = u.role === "moderator";
           const isAdminRole = u.role === "admin";
           let actionBtn = "";
           if (isAdminRole) {
             actionBtn = `<span class="muted" style="font-size:0.8rem;">Es administrador</span>`;
-          } else if (isMod) {
-            actionBtn = `<button class="button button-quiet btn-demote-mod" data-id="${u.id}" data-username="${esc(u.username)}" style="padding:0.3rem 0.6rem; font-size:0.8rem;">Quitar rol moderador</button>`;
           } else {
-            actionBtn = `<button class="button btn-promote-mod" data-id="${u.id}" data-username="${esc(u.username)}" style="padding:0.3rem 0.6rem; font-size:0.8rem; background:var(--blue);">Hacer moderador</button>`;
+            actionBtn = `<select class="staff-role-select" data-id="${u.id}" data-username="${esc(u.username)}" style="padding:0.3rem; font-size:0.8rem;">
+              <option value="member" ${u.role === "member" ? "selected" : ""}>Miembro</option>
+              <option value="moderator" ${u.role === "moderator" ? "selected" : ""}>Moderador</option>
+              <option value="primex_admin" ${u.role === "primex_admin" ? "selected" : ""}>Primex del admin</option>
+            </select>`;
           }
           return `
             <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0; border-bottom:1px solid var(--line);">
-              <span><strong>${esc(u.username)}</strong> (Rol: ${esc(u.role)})</span>
+              <span><strong>${esc(u.username)}</strong> (Rol: ${esc(roleLabel(u.role))})</span>
               ${actionBtn}
             </div>
           `;
@@ -1027,13 +1037,11 @@ async function moderationPage() {
 
     if (modSearchResults) {
       modSearchResults.onclick = async e => {
-        const isPromote = e.target.classList.contains("btn-promote-mod");
-        const isDemote = e.target.classList.contains("btn-demote-mod");
-        if (isPromote || isDemote) {
+        if (e.target.classList.contains("staff-role-select")) {
           const userId = e.target.getAttribute("data-id");
           const username = e.target.getAttribute("data-username");
-          const newRole = isPromote ? "moderator" : "member";
-          const actionText = isPromote ? "promover a moderador a" : "quitar el rol de moderador a";
+          const newRole = e.target.value;
+          const actionText = `asignar el rol ${roleLabel(newRole)} a`;
           if (confirm(`¿Querés ${actionText} "${username}"?`)) {
             try {
               e.target.disabled = true;
@@ -1347,7 +1355,7 @@ async function updateAuth(){
       }
       
       let modLink = document.querySelector("#nav-moderacion");
-      if (profile && (profile.role === "moderator" || profile.role === "admin")) {
+      if (isStaffProfile(profile)) {
         if (!modLink) {
           modLink = document.createElement("a");
           modLink.href = "#moderacion";

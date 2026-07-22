@@ -42,8 +42,10 @@ este archivo.
    habilitada la confirmación.
 2. En **Table Editor > profiles**, localice esa cuenta y cambie `role` a
    `admin`.
-3. Desde entonces, ese administrador puede asignar `moderator` a otros
-   perfiles desde el panel de Supabase.
+3. Desde entonces, ese administrador puede asignar `moderator` o
+   `primex_admin` a otros perfiles desde la consola del sitio. Ambos roles
+   tienen los mismos permisos; en la interfaz `primex_admin` se muestra como
+   **Primex del admin**.
 
 ## 5. Verificación mínima
 
@@ -84,6 +86,10 @@ ajenos.
 > previsual­izas usando `object URL` locales y no se persisten.
 
 ## 7. Migraciones de la interfaz de moderación
+
+Para agregar el rol **Primex del admin** a un proyecto que ya existe, ejecute
+una vez `supabase/add_primex_admin_role.sql`. El script agrega el valor
+`primex_admin` y le concede los mismos permisos que a `moderator`.
 
 Ejecute una vez `supabase/delete_user_and_content.sql` desde SQL Editor. Es
 necesario en todos los proyectos para que la eliminación desde la consola

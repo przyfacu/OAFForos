@@ -1,7 +1,7 @@
 -- OAFForos: ejecutar en el SQL Editor de un proyecto Supabase vacío.
 create extension if not exists pgcrypto;
 
-create type public.app_role as enum ('member', 'moderator', 'admin');
+create type public.app_role as enum ('member', 'moderator', 'primex_admin', 'admin');
 create type public.content_status as enum ('published', 'hidden', 'closed', 'deleted');
 create type public.proposal_status as enum ('pending', 'approved', 'rejected', 'changes_requested');
 create type public.problem_kind as enum ('theoretical', 'experimental');
@@ -105,7 +105,7 @@ create table public.reports (
 
 create or replace function public.is_staff()
 returns boolean language sql stable security definer set search_path = public
-as $$ select exists(select 1 from public.profiles where id = auth.uid() and role in ('moderator','admin')) $$;
+as $$ select exists(select 1 from public.profiles where id = auth.uid() and role in ('moderator', 'primex_admin', 'admin')) $$;
 create or replace function public.is_admin()
 returns boolean language sql stable security definer set search_path = public
 as $$ select exists(select 1 from public.profiles where id = auth.uid() and role = 'admin') $$;

@@ -24,4 +24,4 @@ Si el proyecto ya estaba creado antes de incorporar problemas teóricos y experi
 
 ## Moderación
 
-El primer administrador se asigna directamente en la tabla `profiles` tras registrarse. Los administradores pueden asignar el rol `moderator` desde el panel de Supabase. Nunca exponga la clave `service_role` en el navegador.
+El primer administrador se asigna directamente en la tabla `profiles` tras registrarse. Los administradores pueden asignar los roles `moderator` y `primex_admin` (mostrado como **Primex del admin**) desde la consola; ambos tienen los mismos permisos. Nunca exponga la clave `service_role` en el navegador.
