@@ -70,14 +70,16 @@ Para habilitar la subida de imágenes, PDFs y archivos en temas, respuestas y pr
    - **Lectura pública** (cualquier visitante puede ver imágenes y descargar archivos).
    - **Escritura** solo para usuarios autenticados.
    - **Borrado** solo para el propietario del archivo.
-   - **Límite de 10 MB** por archivo.
+   - **Límite de 5 MB** por archivo.
    - Tipos permitidos: imágenes, PDF, Word, Excel, PowerPoint, TXT, ZIP, RAR.
 
 2. Opcionalmente en **Storage > Policies**, verifique que las tres políticas
    `attachments_*` estén activas en el bucket `attachments`.
 
-Si el proyecto ya tenía adjuntos configurados, ejecute también una vez
-`supabase/fix_attachments_rls.sql`. Reemplaza una política antigua e insegura
+Si el proyecto ya tenía adjuntos configurados, ejecute una vez
+`supabase/update_attachments_file_size_limit.sql` para establecer el límite del
+bucket existente a 5 MB. Ejecute también `supabase/fix_attachments_rls.sql`
+si corresponde: reemplaza una política antigua e insegura
 que permitía a cualquier usuario autenticado borrar metadatos de adjuntos
 ajenos.
 

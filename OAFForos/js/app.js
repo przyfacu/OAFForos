@@ -3,6 +3,7 @@ import { configured, supabase, currentUser } from "./supabase.js";
 import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, deleteTopic, pinTopic, createReply, updateReply, deleteReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword, uploadAttachments, updateProblem, updateTopicModerated, searchUsersByUsername, deleteUserAndPosts, setUserRole } from "./api.js";
 
 const STAFF_ROLES = new Set(["moderator", "primex_admin", "admin"]);
+const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
 const roleLabel = role => ({
   member: "Miembro",
   moderator: "Moderador",
@@ -154,6 +155,7 @@ function buildAttachmentUploaderHTML(inputId) {
         Adjuntar archivos
       </label>
       <input type="file" id="${inputId}" class="attachment-input" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" style="display:none;">
+      <small class="muted">Máximo 5 MB por archivo. Para archivos más pesados, subilos a Google Drive y pegá el enlace en el mensaje.</small>
       <div class="attachment-preview-area" id="preview-${inputId}"></div>
     </div>
   `;
@@ -203,8 +205,15 @@ function initAttachmentUploader(inputId) {
 
   input.addEventListener("change", () => {
     const newFiles = Array.from(input.files);
+    const oversizedFiles = newFiles.filter(file => file.size > MAX_ATTACHMENT_SIZE);
+    if (oversizedFiles.length) {
+      const names = oversizedFiles.map(file => `“${file.name}”`).join(", ");
+      flash(`${names} supera el límite de 5 MB. Subilo a Google Drive y pegá el enlace en el mensaje.`);
+    }
+
+    const allowedFiles = newFiles.filter(file => file.size <= MAX_ATTACHMENT_SIZE);
     // Limit total 10 files
-    const combined = [...files, ...newFiles].slice(0, 10);
+    const combined = [...files, ...allowedFiles].slice(0, 10);
     files = combined;
     input.value = "";
     renderPreview();

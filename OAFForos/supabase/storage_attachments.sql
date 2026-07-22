@@ -11,7 +11,7 @@ VALUES (
   'attachments',
   'attachments',
   true,                   -- público: las URLs son accesibles sin autenticación
-  10485760,               -- límite: 10 MB por archivo
+  5242880,                -- límite: 5 MB por archivo
   ARRAY[
     'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp',
     'application/pdf',
@@ -27,7 +27,9 @@ VALUES (
     'application/x-zip-compressed'
   ]
 )
-ON CONFLICT (id) DO NOTHING;
+-- También actualiza el bucket si ya existía con otro límite.
+ON CONFLICT (id) DO UPDATE
+SET file_size_limit = EXCLUDED.file_size_limit;
 
 
 -- 2. Política: Lectura pública (cualquier visitante puede ver los archivos)

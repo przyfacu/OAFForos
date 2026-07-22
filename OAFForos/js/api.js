@@ -815,6 +815,12 @@ export async function updateUserPassword(newPassword) {
  * @returns {Promise<Array<{name, path, url, type, size}>>}
  */
 export async function uploadAttachments(files, context, contextId) {
+  const maxFileSize = 5 * 1024 * 1024;
+  const oversizedFile = Array.from(files).find(file => file.size > maxFileSize);
+  if (oversizedFile) {
+    throw new Error(`\"${oversizedFile.name}\" supera el límite de 5 MB. Subilo a Google Drive y pegá el enlace en el mensaje.`);
+  }
+
   if (!supabase) {
     // Demo mode: devuelve objetos fake con object URL
     return Array.from(files).map(f => ({
