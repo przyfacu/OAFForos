@@ -1,6 +1,6 @@
 import { demo } from "./demo-data.js";
 import { configured, supabase, currentUser } from "./supabase.js";
-import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, deleteTopic, pinTopic, createReply, updateReply, deleteReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword, uploadAttachments, updateProblem, updateTopicModerated, searchUsersByUsername, deleteUserAndPosts, setUserRole } from "./api.js";
+import { getCategories, getTopics, getTopic, search, createTopic, updateTopic, deleteTopic, pinTopic, createReply, updateReply, deleteReply, createReport, archiveRoots, archiveChildren, getProblem, createArchiveProposal, getCurrentUserProfile, getArchiveProposals, updateProposalStatus, getReports, resolveReport, getCompetitionTypes, getCompetitions, getEditions, getLevels, publishProblem, checkUsernameTaken, updateProfileUsername, sendPasswordResetEmail, updateUserPassword, uploadAttachments, updateProblem, updateArchiveCategory, updateTopicModerated, searchUsersByUsername, deleteUserAndPosts, setUserRole } from "./api.js";
 
 const STAFF_ROLES = new Set(["moderator", "primex_admin", "admin"]);
 const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024;
@@ -86,7 +86,11 @@ function renderBodyWithInlineImages(text, attachments = []) {
   return result ? result + md(source.slice(lastIndex)) : md(source);
 }
 
-function flash(message){ notice.textContent=message;notice.classList.add("show");setTimeout(()=>notice.classList.remove("show"),3200); }
+function flash(message){
+  notice.innerHTML = `<span>${esc(message)}</span><button type="button" class="notice-close" aria-label="Cerrar aviso">×</button>`;
+  notice.classList.add("show");
+  notice.querySelector(".notice-close").onclick = () => notice.classList.remove("show");
+}
 function nav(){document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("active",location.hash.startsWith(a.getAttribute("href"))))}
 
 // ─── Attachments helpers ─────────────────────────────────────────────────────
@@ -281,9 +285,25 @@ const problemKindLabel = kind => kind === "experimental" ? "experimental" : "te�
 const problemLabel = p => `Problema ${problemKindLabel(p.kind)} ${p.number}`;
 
 async function archiveDetail(id){
-  let {item,label,items}=await archiveChildren(id);
+  let {item,itemType,label,items}=await archiveChildren(id);
   if(!item){return archive();}
-  main.innerHTML=`<section class="page-head"><div class="eyebrow">Archivo / ${label}</div><h1>${esc(item.title)}</h1><p>${esc(item.description||"Seleccioná una entrada para continuar el recorrido.")}</p></section><section class="forum-layout"><p class="archive-path"><a href="#archivo">Archivo</a> <span>/</span> ${label}</p><div class="archive-list">${items.map(x=>`<a class="archive-item" href="#${x.number?"problema":"archivo"}/${x.id}"><span><strong>${x.number?`${problemLabel(x)}: `:""}${esc(x.title)}</strong><small>${esc(x.source||x.description||"")}</small></span><span>›</span></a>`).join("")}</div></section>`;
+  const profile = await getCurrentUserProfile();
+  const editButton = isStaffProfile(profile) ? `<button class="button button-quiet" id="edit-archive-category-btn" style="margin-top:1rem;">✏️ Editar categoría</button>` : "";
+  let editTypeButton = "";
+  let typeInfo = "";
+  if (itemType === "competition") {
+    const typeTitle = item.competition_types?.title || item.type || "Competencia";
+    typeInfo = `<p style="margin-top:0.5rem; font-size:0.9rem;" class="muted">Tipo: ${esc(typeTitle)}</p>`;
+    if (isStaffProfile(profile)) {
+      editTypeButton = `<button class="button button-quiet" id="edit-archive-type-btn" style="margin-top:1rem; margin-left:0.5rem;">✏️ Editar tipo</button>`;
+    }
+  }
+  main.innerHTML=`<section class="page-head"><div class="eyebrow">Archivo / ${label}</div><h1>${esc(item.title)}</h1><p>${esc(item.description||"Seleccioná una entrada para continuar el recorrido.")}</p>${typeInfo}${editButton}${editTypeButton}</section><section class="forum-layout"><p class="archive-path"><a href="#archivo">Archivo</a> <span>/</span> ${label}</p><div class="archive-list">${items.map(x=>`<a class="archive-item" href="#${x.number?"problema":"archivo"}/${x.id}"><span><strong>${x.number?`${problemLabel(x)}: `:""}${esc(x.title)}</strong><small>${esc(x.source||x.description||"")}</small></span><span>›</span></a>`).join("")}</div></section>`;
+  document.getElementById("edit-archive-category-btn")?.addEventListener("click", () => showEditArchiveCategoryModal(item, itemType, id));
+  if (itemType === "competition") {
+    const typeObj = item.competition_types || (item.type ? { id: item.type, title: item.type } : null);
+    document.getElementById("edit-archive-type-btn")?.addEventListener("click", () => showEditArchiveCategoryModal(typeObj, "competition_type", id));
+  }
 }
 
 async function problem(id){
@@ -418,6 +438,12 @@ async function problem(id){
   }
 
 async function showEditProblemModal(p) {
+  const [types, competitions, editions, levels] = await Promise.all([
+    getCompetitionTypes(),
+    getCompetitions(),
+    getEditions(p.competitionId),
+    getLevels(p.editionId)
+  ]);
   modal.style.width = "min(650px, calc(100% - 2rem))";
   modal.innerHTML = `
     <div class="modal-content" style="width: 100%;">
@@ -426,6 +452,15 @@ async function showEditProblemModal(p) {
       <p class="muted" style="margin-bottom: 1.5rem;">Modificá los datos del problema oficial.</p>
       
       <form id="edit-problem-form">
+        <fieldset style="border:1px solid var(--line); margin:0 0 1rem; padding:1rem;">
+          <legend style="font-weight:600; padding:0 .3rem;">Categorización en el archivo</legend>
+          <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.8rem;">
+            <div><label for="edit-prob-type">Tipo de competencia</label><select class="input" id="edit-prob-type" required>${types.map(t => `<option value="${t.id}"${t.id === p.competitionTypeId ? " selected" : ""}>${esc(t.title)}</option>`).join("")}</select></div>
+            <div><label for="edit-prob-competition">Competencia</label><select class="input" id="edit-prob-competition" required></select></div>
+            <div><label for="edit-prob-edition">Edición / año</label><select class="input" id="edit-prob-edition" required></select></div>
+            <div><label for="edit-prob-level">Nivel</label><select class="input" id="edit-prob-level" required></select></div>
+          </div>
+        </fieldset>
         <div style="display:grid; grid-template-columns: 80px 160px 1fr; gap:0.5rem;">
           <div>
             <label for="edit-prob-number" style="font-size:0.8rem; font-weight:600;">Número</label>
@@ -462,6 +497,29 @@ async function showEditProblemModal(p) {
   document.getElementById("modal-close-btn").onclick = () => modal.close();
   modal.showModal();
 
+  const typeSelect = document.getElementById("edit-prob-type");
+  const competitionSelect = document.getElementById("edit-prob-competition");
+  const editionSelect = document.getElementById("edit-prob-edition");
+  const levelSelect = document.getElementById("edit-prob-level");
+  const fillLevels = async (editionId, selectedId) => {
+    const rows = editionId === p.editionId ? levels : await getLevels(editionId);
+    levelSelect.innerHTML = rows.map(x => `<option value="${x.id}"${x.id === selectedId ? " selected" : ""}>${esc(x.title)}</option>`).join("");
+  };
+  const fillEditions = async (competitionId, selectedId) => {
+    const rows = competitionId === p.competitionId ? editions : await getEditions(competitionId);
+    editionSelect.innerHTML = rows.map(x => `<option value="${x.id}"${x.id === selectedId ? " selected" : ""}>${esc(x.title)}</option>`).join("");
+    await fillLevels(editionSelect.value, competitionId === p.competitionId ? p.levelId : null);
+  };
+  const fillCompetitions = async (typeId, selectedId) => {
+    const rows = competitions.filter(x => x.type_id === typeId);
+    competitionSelect.innerHTML = rows.map(x => `<option value="${x.id}"${x.id === selectedId ? " selected" : ""}>${esc(x.title)}</option>`).join("");
+    await fillEditions(competitionSelect.value, typeId === p.competitionTypeId ? p.editionId : null);
+  };
+  typeSelect.onchange = () => fillCompetitions(typeSelect.value, null);
+  competitionSelect.onchange = () => fillEditions(competitionSelect.value, null);
+  editionSelect.onchange = () => fillLevels(editionSelect.value, null);
+  await fillCompetitions(typeSelect.value, p.competitionId);
+
   document.getElementById("edit-problem-form").onsubmit = async ev => {
     ev.preventDefault();
     const payload = {
@@ -469,7 +527,8 @@ async function showEditProblemModal(p) {
       kind: document.getElementById("edit-prob-kind").value,
       title: document.getElementById("edit-prob-title").value.trim(),
       statement: document.getElementById("edit-prob-statement").value.trim(),
-      source_url: document.getElementById("edit-prob-source").value.trim()
+      source_url: document.getElementById("edit-prob-source").value.trim(),
+      level_id: levelSelect.value
     };
 
     try {
@@ -480,6 +539,30 @@ async function showEditProblemModal(p) {
     } catch (err) {
       alert("Error al actualizar el problema: " + err.message);
     }
+  };
+}
+
+async function showEditArchiveCategoryModal(item, itemType, returnId) {
+  const labels = {competition_type:"Tipo de competencia", competition:"Competencia", edition:"Edición / año", level:"Nivel"};
+  modal.style.width = "min(520px, calc(100% - 2rem))";
+  modal.innerHTML = `<div class="modal-content"><button class="icon-button" style="float:right" id="modal-close-btn">×</button><h2>Editar ${labels[itemType] || "Categoría"}</h2><form id="edit-archive-category-form"><div class="form-row"><label for="archive-category-title">Nombre</label><input class="input" id="archive-category-title" required value="${esc(item.title)}"></div>${itemType === "competition" ? `<div class="form-row"><label for="archive-category-description">Descripción</label><textarea class="input" id="archive-category-description" style="min-height:100px;">${esc(item.description || "")}</textarea></div>` : ""}${itemType === "edition" ? `<div class="form-row"><label for="archive-category-year">Año (opcional)</label><input class="input" id="archive-category-year" type="number" min="1900" max="2100" value="${item.year || ""}"></div>` : ""}<button class="button" style="width:100%;">Guardar cambios</button></form></div>`;
+  document.getElementById("modal-close-btn").onclick = () => modal.close();
+  modal.showModal();
+  document.getElementById("edit-archive-category-form").onsubmit = async event => {
+    event.preventDefault();
+    const payload = {title:document.getElementById("archive-category-title").value.trim()};
+    if (itemType === "competition") payload.description = document.getElementById("archive-category-description").value.trim();
+    if (itemType === "edition") payload.year = document.getElementById("archive-category-year").value || null;
+    try {
+      await updateArchiveCategory(itemType, item.id, payload);
+      modal.close();
+      flash("Categoría actualizada con éxito.");
+      if (itemType === "competition_type" && !returnId) {
+        await archive();
+      } else {
+        await archiveDetail(returnId);
+      }
+    } catch (err) { alert("Error al actualizar la categoría: " + err.message); }
   };
 }
 

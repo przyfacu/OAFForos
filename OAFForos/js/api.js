@@ -357,30 +357,47 @@ export async function archiveRoots() {
 
 export async function archiveChildren(id) {
   if (!supabase) {
-    if (demo.archive.some(x=>x.id===id)) return {item:demo.archive.find(x=>x.id===id), label:"Ediciones", items:demo.editions.filter(x=>x.competition===id)};
-    if (demo.editions.some(x=>x.id===id)) return {item:demo.editions.find(x=>x.id===id), label:"Niveles", items:demo.levels.filter(x=>x.edition===id)};
-    return {item:demo.levels.find(x=>x.id===id), label:"Problemas", items:demo.problems.filter(x=>x.level===id)};
+    if (demo.archive.some(x=>x.id===id)) return {item:demo.archive.find(x=>x.id===id), itemType:"competition", label:"Ediciones", items:demo.editions.filter(x=>x.competition===id)};
+    if (demo.editions.some(x=>x.id===id)) return {item:demo.editions.find(x=>x.id===id), itemType:"edition", label:"Niveles", items:demo.levels.filter(x=>x.edition===id)};
+    return {item:demo.levels.find(x=>x.id===id), itemType:"level", label:"Problemas", items:demo.problems.filter(x=>x.level===id)};
   }
-  let {data: edition, error} = await supabase.from("editions").select("*,competitions(title)").eq("competition_id", id).order("position");
-  if (!error && edition.length) return {item:{title:edition[0].competitions.title},label:"Ediciones",items:edition.map(x=>({id:x.id,title:x.title,description:x.year?`Año ${x.year}`:""}))};
-  let {data: levels, error:levelError} = await supabase.from("levels").select("*,editions(title)").eq("edition_id", id).order("position");
-  if (!levelError && levels.length) return {item:{title:levels[0].editions.title},label:"Niveles",items:levels};
+  const { data: competition } = await supabase.from("competitions").select("*, competition_types(id,title)").eq("id", id).maybeSingle();
+  if (competition) {
+    const { data: editions, error } = await supabase.from("editions").select("*").eq("competition_id", id).order("position");
+    if (error) throw error;
+    return {item:competition, itemType:"competition", label:"Ediciones", items:editions.map(x=>({...x,description:x.year?`Año ${x.year}`:""}))};
+  }
+  const { data: edition } = await supabase.from("editions").select("*").eq("id", id).maybeSingle();
+  if (edition) {
+    const { data: levels, error } = await supabase.from("levels").select("*").eq("edition_id", id).order("position");
+    if (error) throw error;
+    return {item:edition, itemType:"edition", label:"Niveles", items:levels};
+  }
+  const { data: level } = await supabase.from("levels").select("*").eq("id", id).maybeSingle();
+  if (!level) return {item:null, label:"", items:[]};
   const {data: problems,error:problemError}=await supabase.from("problems").select("*").eq("level_id",id).eq("status","published").order("number");
   if(problemError) throw problemError;
-  return {item:{title:"Problemas"},label:"Problemas",items:problems};
+  return {item:level, itemType:"level", label:"Problemas",items:problems};
 }
 
 export async function getProblem(id) {
-  if (!supabase) return demo.problems.find(x=>x.id===id);
+  if (!supabase) {
+    const problem = demo.problems.find(x=>x.id===id);
+    if (!problem) return problem;
+    const level = demo.levels.find(x => x.id === problem.level);
+    const edition = demo.editions.find(x => x.id === level?.edition);
+    const competition = demo.archive.find(x => x.id === edition?.competition);
+    return {...problem, levelId:level?.id, editionId:edition?.id, competitionId:competition?.id, competitionTypeId:competition?.type};
+  }
   let data, error;
-  const res = await supabase.from("problems").select("*,topics!problem_id(id),attachments!problem_id(*)").eq("id",id).single();
+  const res = await supabase.from("problems").select("*,levels!level_id(id,edition_id,editions!edition_id(id,competition_id,competitions!competition_id(id,type_id))),topics!problem_id(id),attachments!problem_id(*)").eq("id",id).single();
   data = res.data;
   error = res.error;
   
   if (error) {
     if (error.code === "PGRST200" || error.code === "42P01" || error.message?.includes("attachments") || error.details?.includes("attachments")) {
       console.warn("La tabla 'attachments' no existe o falla en la consulta. Reintentando sin adjuntos:", error);
-      const fallbackRes = await supabase.from("problems").select("*,topics!problem_id(id)").eq("id",id).single();
+      const fallbackRes = await supabase.from("problems").select("*,levels!level_id(id,edition_id,editions!edition_id(id,competition_id,competitions!competition_id(id,type_id))),topics!problem_id(id)").eq("id",id).single();
       if (fallbackRes.error) throw fallbackRes.error;
       data = fallbackRes.data;
       data.attachments = [];
@@ -397,6 +414,10 @@ export async function getProblem(id) {
     title:data.title,
     statement:data.statement,
     source:data.source_url || "Archivo OAFForos",
+    levelId:data.level_id,
+    editionId:data.levels?.edition_id,
+    competitionId:data.levels?.editions?.competition_id,
+    competitionTypeId:data.levels?.editions?.competitions?.type_id,
     topicId:Array.isArray(data.topics) ? data.topics[0]?.id : data.topics?.id,
     attachments: (data.attachments || []).map(att => ({
       ...att,
@@ -414,6 +435,7 @@ export async function updateProblem(id, data) {
     p.title = data.title;
     p.statement = data.statement;
     p.source = data.source_url || "Archivo OAFForos";
+    p.level = data.level_id;
     return p;
   }
   
@@ -422,7 +444,8 @@ export async function updateProblem(id, data) {
     kind: data.kind,
     title: data.title,
     statement: data.statement,
-    source_url: data.source_url || null
+    source_url: data.source_url || null,
+    level_id: data.level_id
   }).eq("id", id).select("*").single();
   
   if (error) throw error;
@@ -430,31 +453,56 @@ export async function updateProblem(id, data) {
 }
 
 export async function getCompetitionTypes() {
-  if (!supabase) return [];
+  if (!supabase) return [...new Set(demo.archive.map(x => x.type))].map((title, position) => ({id:title, title, position}));
   const { data, error } = await supabase.from("competition_types").select("*").order("position");
   if (error) throw error;
   return data;
 }
 
 export async function getCompetitions() {
-  if (!supabase) return [];
+  if (!supabase) return demo.archive.map((x, position) => ({...x, type_id:x.type, position}));
   const { data, error } = await supabase.from("competitions").select("*").order("position");
   if (error) throw error;
   return data;
 }
 
 export async function getEditions(competitionId) {
-  if (!supabase) return [];
+  if (!supabase) return demo.editions.filter(x => x.competition === competitionId);
   const { data, error } = await supabase.from("editions").select("*").eq("competition_id", competitionId).order("position");
   if (error) throw error;
   return data;
 }
 
 export async function getLevels(editionId) {
-  if (!supabase) return [];
+  if (!supabase) return demo.levels.filter(x => x.edition === editionId);
   const { data, error } = await supabase.from("levels").select("*").eq("edition_id", editionId).order("position");
   if (error) throw error;
   return data;
+}
+
+export async function updateArchiveCategory(itemType, id, data) {
+  const fields = itemType === "competition"
+    ? {title:data.title, description:data.description || ""}
+    : itemType === "edition"
+      ? {title:data.title, year:data.year || null}
+      : {title:data.title};
+  if (!supabase) {
+    if (itemType === "competition_type") {
+      demo.archive.forEach(x => {
+        if (x.type === id) x.type = data.title;
+      });
+      return { id: data.title, title: data.title };
+    }
+    const collection = itemType === "competition" ? demo.archive : itemType === "edition" ? demo.editions : demo.levels;
+    const item = collection.find(x => x.id === id);
+    if (!item) throw new Error("Categoría no encontrada.");
+    Object.assign(item, fields);
+    return item;
+  }
+  const table = itemType === "competition" ? "competitions" : itemType === "edition" ? "editions" : itemType === "level" ? "levels" : "competition_types";
+  const { data: updated, error } = await supabase.from(table).update(fields).eq("id", id).select("*").single();
+  if (error) throw error;
+  return updated;
 }
 
 export async function publishProblem(proposalId, data) {

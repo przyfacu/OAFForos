@@ -10,6 +10,13 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
     <link rel="stylesheet" href="css/styles.css" />
+    <style>
+      .notice { display: flex; align-items: center; gap: .75rem; padding: .7rem .8rem .7rem 1rem; }
+      .notice.show { pointer-events: auto; }
+      .notice-close { display: grid; place-items: center; width: 1.7rem; height: 1.7rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font: 1.35rem/1 var(--sans); }
+      .notice-close:hover, .notice-close:focus-visible { background: #ffffff24; }
+      .notice-close:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    </style>
   </head>
   <body>
     <a class="skip-link" href="#main">Saltar al contenido</a>
@@ -33,4 +40,3 @@
     <script type="module" src="js/app.js"></script>
   </body>
 </html>
-
